@@ -1,0 +1,346 @@
+// Esquema de base de datos para PitStop - Rastreador de estatus de servicio
+//
+// NOTA: PostgreSQL (producción y desarrollo). Levanta una instancia local con
+// `docker compose -f config/docker-compose.yml up -d` (ver scripts/dev.ps1) o apunta
+// DATABASE_URL a una instancia administrada (Render, Neon, Supabase, etc.).
+//
+// Los campos `role`/`status`/etc. se modelan como `String` (no como `enum` de Prisma) a propósito:
+// el código de la aplicación siempre trabaja con los literales ('ADVISOR', 'RECIBIDO', etc.),
+// nunca con el tipo enum de Prisma directamente.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("ADVISOR") // ADVISOR | ADMIN
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  workOrders             WorkOrder[]              @relation("AdvisorWorkOrders")
+  stageComments          StageComment[]
+  immobilizedUnits       ImmobilizedUnit[]
+  immobilizedComments    ImmobilizedComment[]
+  insuranceStageComments InsuranceStageComment[]
+
+  @@map("users")
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vehicles Vehicle[]
+
+  @@map("customers")
+}
+
+model Vehicle {
+  id         String   @id @default(uuid())
+  brand      String
+  model      String
+  year       Int?
+  color      String?
+  // Sin @unique: el DMS reutiliza VINs "dummy" (ej. placeholders de VENTAS/SERVICIO) para
+  // varias unidades internas de la agencia, y en teoría una placa puede reasignarse.
+  // La identidad real de un vehículo importado se resuelve por la combinación (plate, vin).
+  plate      String
+  vin        String
+  logoUrl    String?
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workOrders       WorkOrder[]
+  immobilizedUnits ImmobilizedUnit[]
+
+  @@index([customerId])
+  @@index([plate])
+  @@index([vin])
+  @@map("vehicles")
+}
+
+model Technician {
+  id        String   @id @default(uuid())
+  name      String
+  specialty String?
+  // A qué módulo pertenece — determina en qué cálculo de capacidad cuenta (ver
+  // docs/ARCHITECTURE.md). Casi siempre son personas distintas y especializadas, así que es un
+  // solo equipo por técnico, no una lista.
+  team      String   @default("SERVICIO") // SERVICIO | HYP
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  workOrders WorkOrder[]
+
+  @@map("technicians")
+}
+
+// Parámetros de la fórmula de capacidad, uno por equipo (ver docs/ARCHITECTURE.md). Servicio
+// usa horas/día; HYP usa cupo de unidades simultáneas por técnico, porque sus órdenes duran
+// días, no horas — "horas disponibles" no es una medida útil ahí.
+model CapacitySettings {
+  id                 String   @id @default(uuid())
+  team               String   @unique // SERVICIO | HYP
+  hoursPerDay        Float? // Solo SERVICIO
+  efficiency         Float? // Solo SERVICIO — horas trabajadas / horas pagadas (0–1)
+  productivity       Float? // Solo SERVICIO — horas facturables / horas trabajadas (0–1)
+  unitsPerTechnician Int? // Solo HYP — cuántas unidades puede tener un técnico en proceso a la vez
+  updatedAt          DateTime @updatedAt
+
+  @@map("capacity_settings")
+}
+
+// Horas estándar por tipo de servicio (ver SERVICE_CATEGORIES en utils/priority.js) — con esto
+// se calcula la demanda en horas de Servicio: suma de horas estándar de las órdenes en proceso
+// clasificadas. Las no clasificadas no se contabilizan (se muestran aparte, no se asume nada).
+model ServiceCategoryHours {
+  id       String @id @default(uuid())
+  category String @unique
+  hours    Float
+
+  @@map("service_category_hours")
+}
+
+model WorkOrder {
+  id                  String    @id @default(uuid())
+  orderNumber         String    @unique // e.g. WO-9421, o el número de orden real del DMS
+  orderType           String    @default("SERVICIO") // SERVICIO | HYP — determina el pipeline de etapas aplicable
+  status              String    @default("RECIBIDO") // Servicio: RECIBIDO | EN_TALLER | LAVADO | CONTROL_CALIDAD | TERMINADO | ENTREGADO — HYP: ver workOrderStatus.js
+  // Marca opcional sobre la etapa actual (no avanza ni retrocede el flujo): POR_ASIGNAR en
+  // RECIBIDO, ESPERANDO_REFACCIONES en EN_TALLER. Se limpia al cambiar de etapa o de tipo de
+  // orden, porque pertenece a la etapa que se abandona. Ver workOrderStatus.js.
+  subState            String?
+  notes               String?
+  receivedAt          DateTime  @default(now())
+  estimatedDeliveryAt DateTime?
+  deliveredAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Campos opcionales alimentados por la importación del DMS (ver docs/DMS_IMPORT.md)
+  dmsStatus       String? // Estatus_Actual crudo tal como lo reporta el DMS, previo al mapeo
+  serviceType     String? // Tipo_Servicio (Diagnóstico, Servicio, Mantenimiento Mayor, etc.)
+  partsNeeded     Boolean? // Refacciones: SI/NO
+  customerWaiting Boolean? // Cliente_Espera: SI/NO — el cliente espera en sitio
+  washNeeded      Boolean? // Lavado: SI/NO
+  advisorCode     String? // Recep — código/iniciales del asesor que recibió la unidad en el DMS
+
+  // Campos del motor de priorización (ver docs/ARCHITECTURE.md). A diferencia de `partsNeeded`
+  // (¿requiere refacciones?, lo reporta el DMS), `partsReady` responde ¿ya llegaron todas?, y
+  // lo marca el personal. Una orden que requiere refacciones y no las tiene completas queda
+  // "congelada": no es asignable.
+  partsReady      Boolean?
+  // Clasificación manual del trabajo, independiente del texto crudo `serviceType` del DMS.
+  // Catálogo provisional (ver utils/priority.js) hasta que exista el catálogo administrable
+  // desde Configuración: MANTENIMIENTO | DIAGNOSTICO_FALLA_RECLAMO | PREVIA
+  serviceCategory String?
+  // Casilla manual independiente de `serviceCategory`: un correctivo pesado también puede
+  // requerir diagnóstico previo, así que no se deriva del tipo de servicio.
+  diagnosisNeeded Boolean?
+
+  // Datos de aseguradora para órdenes HYP (hojalatería y pintura). Independientes del
+  // `InsuranceCase` de Inmovilizados/Seguros — esos expedientes son 1-a-1 con una
+  // `ImmobilizedUnit` (unidad con daño reportada por el cliente), mientras que aquí se captura
+  // el dato mínimo que necesita el controlista de HYP directo en la lista, sin tener que abrir
+  // el módulo de Seguros para verlo.
+  insurer      String?
+  reportNumber String?
+
+  vehicleId String
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  technicianId String?
+  technician   Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  // Cuándo se asignó el técnico actual — el reloj del semáforo de avance (ver
+  // utils/workProgress.js en el frontend) arranca aquí, no en `receivedAt`: el tiempo estándar
+  // de una operación mide trabajo de taller, no la espera previa a que alguien la tome. Se
+  // reinicia al reasignar a otro técnico, porque el trabajo efectivamente vuelve a empezar.
+  technicianAssignedAt DateTime?
+
+  advisorId String?
+  advisor   User?   @relation("AdvisorWorkOrders", fields: [advisorId], references: [id], onDelete: SetNull)
+
+  statusEvents  StatusEvent[]
+  stageComments StageComment[]
+  pendingParts  PendingPart[]
+
+  @@index([status])
+  @@index([receivedAt])
+  @@map("work_orders")
+}
+
+// Refacciones pedidas para una orden — reemplaza al viejo sub-estado manual "Esperando
+// refacciones" con un registro real por pieza. Mientras haya al menos una fila sin recibir, la
+// orden se muestra como "esperando refacciones"; cuando todas se marcan recibidas, el backend
+// recalcula `WorkOrder.partsReady` solo (ver recomputePartsReady en workOrders.service.js), así
+// que alimenta directo el congelamiento del motor de priorización.
+model PendingPart {
+  id          String    @id @default(uuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  partNumber  String // # de parte
+  description String? // Descripción de la refacción (opcional)
+  orderNumber String // # de pedido (con el proveedor/refaccionaria)
+  orderDate   DateTime // Fecha de pedido
+  received    Boolean   @default(false)
+  receivedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([workOrderId])
+  @@map("pending_parts")
+}
+
+// Historial de cambios de estatus, alimenta las marcas de tiempo del stepper
+model StatusEvent {
+  id          String   @id @default(uuid())
+  status      String
+  occurredAt  DateTime @default(now())
+  note        String?
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+
+  @@index([workOrderId])
+  @@map("status_events")
+}
+
+// Historial de seguimientos: comentarios libres que el personal agrega a cualquier etapa de una
+// orden (a diferencia de StatusEvent.note, que solo se captura al cambiar de estatus). Cada
+// comentario queda ligado a la etapa a la que corresponde, con fecha de registro y el usuario
+// que lo escribió (requiere que cada persona inicie sesión con su propia cuenta).
+model StageComment {
+  id          String   @id @default(uuid())
+  stage       String // RECIBIDO | EN_TALLER | LAVADO | CONTROL_CALIDAD | TERMINADO | ENTREGADO
+  comment     String
+  createdAt   DateTime @default(now())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([workOrderId])
+  @@map("stage_comments")
+}
+
+// Mapeo configurable: cada valor crudo de Estatus_Actual que reporta el DMS se traduce a uno
+// de los 6 estatus internos del stepper. Se administra desde la página de Configuración; el
+// importador crea entradas nuevas automáticamente (por defecto en RECIBIDO) cuando encuentra
+// un valor de estatus que aún no está mapeado.
+model StatusMapping {
+  id             String   @id @default(uuid())
+  dmsStatus      String   @unique
+  internalStatus String   // RECIBIDO | EN_TALLER | LAVADO | CONTROL_CALIDAD | TERMINADO | ENTREGADO
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("status_mappings")
+}
+
+// Unidad con daño registrada por el equipo. El tipo de tratamiento determina qué información
+// adicional aplica: Garantía habilita el número de reporte en el DMS; Aseguradora abre
+// automáticamente un InsuranceCase (con su checklist de documentos) que se administra desde el
+// módulo Seguros. Las fotos de daño/resuelto quedan pendientes de implementar (ver
+// docs/ARCHITECTURE.md) — por ahora solo hay un botón de cámara sin funcionalidad en el frontend.
+model ImmobilizedUnit {
+  id              String    @id @default(uuid())
+  vehicleId       String
+  vehicle         Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  damageDate      DateTime // Fecha de captura del daño
+  treatmentType   String    // REPARACION_INTERNA | GARANTIA | ASEGURADORA
+  dmsReportNumber String? // Número de reporte en el DMS — solo aplica si treatmentType = GARANTIA
+  description     String?
+  resolved        Boolean   @default(false)
+  resolvedAt      DateTime?
+  registeredById  String
+  registeredBy    User      @relation(fields: [registeredById], references: [id], onDelete: Restrict)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  insuranceCase InsuranceCase?
+  comments      ImmobilizedComment[]
+
+  @@index([treatmentType])
+  @@index([resolved])
+  @@map("immobilized_units")
+}
+
+// Comentarios libres sobre una unidad inmovilizada — a diferencia de StageComment (ligado a una
+// etapa de WorkOrder), aquí no hay etapas: es un único hilo de seguimiento por unidad.
+model ImmobilizedComment {
+  id                String   @id @default(uuid())
+  comment           String
+  createdAt         DateTime @default(now())
+  immobilizedUnitId String
+  immobilizedUnit   ImmobilizedUnit @relation(fields: [immobilizedUnitId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([immobilizedUnitId])
+  @@map("immobilized_comments")
+}
+
+// Expediente de seguros: se crea automáticamente cuando una ImmobilizedUnit pasa a tratamiento
+// ASEGURADORA (junto con sus 6 InsuranceDocument en false). Vive independiente del tratamiento —
+// si la unidad se "extrae" de Seguros (cambia de tratamiento), el caso y su historial se conservan.
+model InsuranceCase {
+  id                String   @id @default(uuid())
+  immobilizedUnitId String   @unique
+  immobilizedUnit   ImmobilizedUnit @relation(fields: [immobilizedUnitId], references: [id], onDelete: Cascade)
+  reportNumber      String? // Número de reporte de la aseguradora
+  insurer           String? // Aseguradora
+  policyType        String? // PLAN_PISO | TRASLADO
+  stage             String   @default("ENVIO_PRESUPUESTO") // ENVIO_PRESUPUESTO | AUTORIZACION | EN_REPARACION | ENTREGADA, solo avanza
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  documents     InsuranceDocument[]
+  stageComments InsuranceStageComment[]
+
+  @@map("insurance_cases")
+}
+
+// Comentarios de seguimiento por etapa del expediente de seguro (mismo patrón que StageComment
+// para WorkOrder): cada comentario queda ligado a la etapa a la que corresponde, con fecha de
+// registro y el usuario que lo escribió.
+model InsuranceStageComment {
+  id              String   @id @default(uuid())
+  stage           String // ENVIO_PRESUPUESTO | AUTORIZACION | EN_REPARACION | ENTREGADA
+  comment         String
+  createdAt       DateTime @default(now())
+  insuranceCaseId String
+  insuranceCase   InsuranceCase @relation(fields: [insuranceCaseId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([insuranceCaseId])
+  @@map("insurance_stage_comments")
+}
+
+// Checklist de documentos del expediente digital. Se crean las 6 filas (una por docType) al
+// abrir el InsuranceCase, todas en completed=false.
+model InsuranceDocument {
+  id              String    @id @default(uuid())
+  insuranceCaseId String
+  insuranceCase   InsuranceCase @relation(fields: [insuranceCaseId], references: [id], onDelete: Cascade)
+  docType         String    // ODA | DEDUCIBLE | DECLARACION_UNIVERSAL | FINIQUITO | ID_DECLARACION | FACTURA_MARCA
+  completed       Boolean   @default(false)
+  completedAt     DateTime?
+
+  @@unique([insuranceCaseId, docType])
+  @@map("insurance_documents")
+}

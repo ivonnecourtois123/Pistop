@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh api *)",
+      "Bash(powershell -NoProfile -Command \"Test-Path 'C:\\\\Users\\\\Mejora Continua\\\\Documents\\\\Proyecto PitStop\\\\stitch_pitstop_service_status_tracker\\\\frontend\\\\node_modules'; Test-Path 'C:\\\\Users\\\\Mejora Continua\\\\Documents\\\\Proyecto PitStop\\\\stitch_pitstop_service_status_tracker\\\\backend\\\\node_modules'\")",
+      "Bash(npm run *)",
+      "Bash(npx prisma *)",
+      "Bash(powershell -NoProfile -Command \"Get-Process node -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,StartTime | Format-Table -AutoSize\")",
+      "Bash(powershell -NoProfile -Command \"Get-CimInstance Win32_Process -Filter \\\\\"Name='node.exe'\\\\\" | Select-Object ProcessId,CommandLine | Format-List\")",
+      "Bash(powershell -NoProfile -Command \"Get-CimInstance Win32_Process -Filter \\\\\"Name='node.exe'\\\\\" | Select-Object ProcessId,ParentProcessId,CommandLine | Format-List\")",
+      "Bash(powershell -NoProfile -Command \"Stop-Process -Id 22036,8856 -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 1; Get-Process -Id 22036,8856 -ErrorAction SilentlyContinue\")",
+      "Bash(netstat -ano)",
+      "Bash(docker --version)",
+      "PowerShell(docker --version)",
+      "Read(//tmp/**)",
+      "Bash(rm -rf prisma/migrations)",
+      "Bash(mkdir -p prisma/migrations/00000000000000_init)",
+      "Bash(cp /tmp/postgres_init.sql prisma/migrations/00000000000000_init/migration.sql)",
+      "Bash(cat)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)"
+    ]
+  }
+}
