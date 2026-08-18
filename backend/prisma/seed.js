@@ -34,21 +34,22 @@ async function main() {
     },
   });
 
-  const vehicle = await prisma.vehicle.upsert({
-    where: { plate: 'ABC-1234' },
-    update: {},
-    create: {
-      brand: 'Nissan',
-      model: 'Sentra',
-      year: 2023,
-      color: 'Plata',
-      plate: 'ABC-1234',
-      vin: '1N4AL3AP0DC123456',
-      logoUrl:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuCTxI-afqXClAtgPQSA7ZXJ0HWkbQi2xnHpL0ck4d0uZ3p1-P78ZkYQuw_GLhYMjR_h_XN30QAo8NSKlczJ2Gj53qmUHnDn7Xbobi-1672v9U4qYOt7TjddOY04i0grcY_3q4HSuE9UZSoVADFj1XrdRL7IePdE_V7qOACSUnrnFcGwPQbtKkC2ZBcWaRsvMvMpdlLCulsXDiDDeQFUw3JVsuwfxZmAkYV3Gygg99NbGL5IlRaUlDlA0Q',
-      customerId: customer.id,
-    },
-  });
+  let vehicle = await prisma.vehicle.findFirst({ where: { plate: 'ABC-1234' } });
+  if (!vehicle) {
+    vehicle = await prisma.vehicle.create({
+      data: {
+        brand: 'Nissan',
+        model: 'Sentra',
+        year: 2023,
+        color: 'Plata',
+        plate: 'ABC-1234',
+        vin: '1N4AL3AP0DC123456',
+        logoUrl:
+          'https://lh3.googleusercontent.com/aida-public/AB6AXuCTxI-afqXClAtgPQSA7ZXJ0HWkbQi2xnHpL0ck4d0uZ3p1-P78ZkYQuw_GLhYMjR_h_XN30QAo8NSKlczJ2Gj53qmUHnDn7Xbobi-1672v9U4qYOt7TjddOY04i0grcY_3q4HSuE9UZSoVADFj1XrdRL7IePdE_V7qOACSUnrnFcGwPQbtKkC2ZBcWaRsvMvMpdlLCulsXDiDDeQFUw3JVsuwfxZmAkYV3Gygg99NbGL5IlRaUlDlA0Q',
+        customerId: customer.id,
+      },
+    });
+  }
 
   const technician = await prisma.technician.upsert({
     where: { id: SEED_TECHNICIAN_ID },
@@ -91,7 +92,7 @@ async function main() {
   const extraStatuses = ['TERMINADO', 'ENTREGADO', 'RECIBIDO'];
   for (let i = 0; i < extraVehicles.length; i += 1) {
     const { plate, model, color, vin } = extraVehicles[i];
-    const existingVehicle = await prisma.vehicle.findUnique({ where: { plate } });
+    const existingVehicle = await prisma.vehicle.findFirst({ where: { plate } });
     const extraVehicle =
       existingVehicle ??
       (await prisma.vehicle.create({
