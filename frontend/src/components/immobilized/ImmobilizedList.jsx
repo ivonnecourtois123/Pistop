@@ -33,7 +33,7 @@ export default function ImmobilizedList({ units, onSelect }) {
                 {unit.vehicle.brand} {unit.vehicle.model} — {unit.vehicle.plate}
               </p>
               <p className="font-data-mono text-xs text-on-surface-variant">
-                {unit.vehicle.customer?.name || 'Sin cliente'} • Daño: {formatDate(unit.damageDate)}
+                Daño: {formatDate(unit.damageDate)}
                 {unit.treatmentType === 'GARANTIA' && unit.dmsReportNumber ? ` • Reporte DMS: ${unit.dmsReportNumber}` : ''}
               </p>
             </div>

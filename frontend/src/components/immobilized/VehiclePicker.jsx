@@ -17,8 +17,8 @@ export const EMPTY_VEHICLE_DRAFT = {
   },
 };
 
-// Resuelve el draft a un vehicleId real: si es "nuevo", primero crea el cliente (si hace falta)
-// y el vehículo. Se usa al enviar el formulario, no en cada cambio de campo.
+// Resuelve el draft a un vehicleId real: si es "nuevo", asocia al cliente "Inventario Agencia"
+// (unidades nuevas de stock de la agencia) y crea el vehículo.
 export async function resolveVehicleId(draft) {
   if (draft.mode === 'existing') {
     if (!draft.vehicleId) throw new Error('Selecciona un vehículo');
@@ -28,11 +28,14 @@ export async function resolveVehicleId(draft) {
   const { newVehicle } = draft;
   let customerId = newVehicle.customerId;
   if (!customerId) {
-    if (!newVehicle.newCustomerName.trim()) {
-      throw new Error('Indica el nombre del cliente (o "Inventario" si la unidad no tiene cliente)');
+    const customers = await listCustomers();
+    const existingInv = customers.find((c) => c.name.toLowerCase().includes('inventario'));
+    if (existingInv) {
+      customerId = existingInv.id;
+    } else {
+      const customer = await createCustomer({ name: 'Inventario Agencia' });
+      customerId = customer.id;
     }
-    const customer = await createCustomer({ name: newVehicle.newCustomerName.trim() });
-    customerId = customer.id;
   }
 
   const vehicle = await createVehicle({
@@ -49,20 +52,18 @@ export async function resolveVehicleId(draft) {
 
 export default function VehiclePicker({ draft, onChange }) {
   const [vehicles, setVehicles] = useState([]);
-  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([listVehicles(), listCustomers()])
-      .then(([vehicleList, customerList]) => {
+    listVehicles()
+      .then((vehicleList) => {
         setVehicles(vehicleList);
-        setCustomers(customerList);
         if (vehicleList.length > 0 && !draft.vehicleId) {
           onChange({ ...draft, vehicleId: vehicleList[0].id });
         }
       })
-      .catch(() => setError('No se pudieron cargar los catálogos de vehículos/clientes.'))
+      .catch(() => setError('No se pudo cargar el catálogo de vehículos.'))
       .finally(() => setLoading(false));
     // Solo se carga una vez al montar.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,7 +100,7 @@ export default function VehiclePicker({ draft, onChange }) {
             draft.mode === 'new' ? 'border-primary bg-primary text-on-primary' : 'border-outline-variant text-primary'
           }`}
         >
-          Vehículo nuevo
+          Vehículo nuevo (Inventario)
         </button>
       </div>
 
@@ -112,41 +113,12 @@ export default function VehiclePicker({ draft, onChange }) {
           {vehicles.length === 0 && <option value="">No hay vehículos registrados</option>}
           {vehicles.map((v) => (
             <option key={v.id} value={v.id}>
-              {v.brand} {v.model} {v.year} — {v.plate} ({v.customer?.name || 'Sin cliente'})
+              {v.brand} {v.model} {v.year ? `${v.year} ` : ''}— {v.plate}
             </option>
           ))}
         </select>
       ) : (
         <div className="space-y-3 rounded-lg border border-outline-variant p-4">
-          <label className="block">
-            <span className="mb-1 block font-label-caps text-label-caps text-on-surface-variant">CLIENTE</span>
-            <select
-              value={draft.newVehicle.customerId}
-              onChange={(e) => updateNewVehicle('customerId', e.target.value)}
-              className="block w-full rounded-lg border border-outline-variant bg-white px-4 py-2 font-body-md text-primary"
-            >
-              <option value="">+ Nuevo cliente</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {!draft.newVehicle.customerId && (
-            <label className="block">
-              <span className="mb-1 block font-label-caps text-label-caps text-on-surface-variant">
-                NOMBRE DEL CLIENTE
-              </span>
-              <input
-                value={draft.newVehicle.newCustomerName}
-                onChange={(e) => updateNewVehicle('newCustomerName', e.target.value)}
-                placeholder='Ricardo Morales (o "Inventario" si no aplica)'
-                className="block w-full rounded-lg border border-outline-variant bg-white px-4 py-2 font-body-md text-primary"
-              />
-            </label>
-          )}
 
           <div className="grid grid-cols-2 gap-3">
             <input

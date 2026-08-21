@@ -28,8 +28,7 @@ export default function InsuranceList({ cases, onSelect }) {
                   {vehicle.brand} {vehicle.model} — {vehicle.plate}
                 </p>
                 <p className="font-data-mono text-xs text-on-surface-variant">
-                  {vehicle.customer?.name || 'Sin cliente'}
-                  {insuranceCase.insurer ? ` • ${insuranceCase.insurer}` : ''}
+                  {insuranceCase.insurer || 'Sin aseguradora asignada'}
                   {insuranceCase.reportNumber ? ` • Reporte: ${insuranceCase.reportNumber}` : ''}
                 </p>
               </div>

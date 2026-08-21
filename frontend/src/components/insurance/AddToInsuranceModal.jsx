@@ -70,7 +70,7 @@ export default function AddToInsuranceModal({ onClose, onAdded }) {
                     {unit.vehicle.brand} {unit.vehicle.model} — {unit.vehicle.plate}
                   </p>
                   <p className="font-data-mono text-xs text-on-surface-variant">
-                    {unit.vehicle.customer?.name || 'Sin cliente'} • {TREATMENT_TYPE_LABELS[unit.treatmentType]}
+                    {TREATMENT_TYPE_LABELS[unit.treatmentType]}
                   </p>
                 </div>
                 <button

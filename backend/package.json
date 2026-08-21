@@ -13,6 +13,9 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "seed": "node prisma/seed.js",
+    "orders:examples": "node scripts/create-example-orders.js",
+    "orders:list": "node scripts/list-orders.js",
+    "immobilized:examples": "node scripts/create-immobilized-examples.js",
     "import:dms": "node scripts/import-dms.js",
     "test": "jest --runInBand"
   },

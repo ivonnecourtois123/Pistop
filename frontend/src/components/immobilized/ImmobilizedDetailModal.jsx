@@ -93,7 +93,7 @@ export default function ImmobilizedDetailModal({ unit, onClose, onUpdated }) {
           <div>
             <h2 className="font-headline-lg text-headline-lg text-primary">Unidad Inmovilizada</h2>
             <p className="font-body-md text-on-surface-variant">
-              {vehicle.brand} {vehicle.model} — {vehicle.plate} • {vehicle.customer?.name || 'Sin cliente'}
+              {vehicle.brand} {vehicle.model} — {vehicle.plate}
             </p>
           </div>
           <button

@@ -94,7 +94,7 @@ export default function InsuranceCaseDetailModal({ insuranceCase, onClose, onUpd
           <div>
             <h2 className="font-headline-lg text-headline-lg text-primary">Expediente de Seguro</h2>
             <p className="font-body-md text-on-surface-variant">
-              {vehicle.brand} {vehicle.model} — {vehicle.plate} • {vehicle.customer?.name || 'Sin cliente'}
+              {vehicle.brand} {vehicle.model} — {vehicle.plate}
             </p>
           </div>
           <button
