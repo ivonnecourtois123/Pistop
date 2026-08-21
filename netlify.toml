@@ -5,6 +5,7 @@
 
 [build.environment]
   NODE_VERSION = "20"
+  VITE_API_URL = "https://pitstop-backend-67zd.onrender.com/api"
 
 # React Router usa rutas del lado del cliente (/login, /hyp, /config, etc.);
 # sin esta regla, recargar cualquier ruta que no sea "/" da 404 en Netlify.
