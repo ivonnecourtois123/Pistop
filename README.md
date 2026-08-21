@@ -1,67 +1,95 @@
 # PitStop — Rastreador de Estatus de Servicio Automotriz
 
-Aplicación full-stack que da seguimiento en tiempo real al ciclo de vida de una orden de trabajo en un taller automotriz: **Recibido → En Taller → Lavado → Control de Calidad → Terminado → Entregado**.
+**PitStop** es una aplicación full-stack diseñada para dar seguimiento y control en tiempo real al flujo y ciclo de vida de las órdenes de servicio en un taller automotriz:
 
-Este repositorio nació a partir de mockups estáticos generados con Google Stitch (ver [docs/design](docs/design)) y fue convertido en una aplicación real con backend y frontend funcionales.
+$$\text{Recibido} \longrightarrow \text{En Taller} \longrightarrow \text{Lavado} \longrightarrow \text{Control de Calidad} \longrightarrow \text{Terminado} \longrightarrow \text{Entregado}$$
 
-## Estructura del repositorio
+---
+
+## 👩‍💻 Autoría y Desarrollo
+
+- **Desarrolladora / Autora:** Ivonne Courtois ([@ivonnecourtois123](https://github.com/ivonnecourtois123))
+- **Correo de contacto:** `mejora.continua2@chesa.mx`
+- **Organización / Proyecto:** PitStop Tracker
+
+---
+
+## 🛠️ Stack Tecnológico
+
+- **Frontend:** React 18, Vite, Tailwind CSS, React Router, Axios.
+- **Backend:** Node.js, Express, Prisma ORM, JWT, Zod, Helmet, Morgan.
+- **Base de Datos:** PostgreSQL (Docker en desarrollo, Render en producción).
+- **Despliegue:** Netlify (Frontend) + Render (Backend & PostgreSQL).
+
+---
+
+## 📁 Estructura del Repositorio
 
 ```
-├── backend/    API REST — Node.js + Express + Prisma + PostgreSQL
-├── frontend/   SPA — React + Vite + Tailwind CSS
-├── docs/
-│   ├── API.md          Referencia de endpoints
-│   ├── ARCHITECTURE.md Arquitectura y modelo de datos
-│   └── design/          Mockups originales de Stitch + sistema de diseño (DESIGN.md)
-├── config/     docker-compose.yml (PostgreSQL para desarrollo local)
-└── scripts/    Scripts de desarrollo
+PitStop/
+├── backend/            # API REST (Node.js, Express, Prisma, PostgreSQL)
+│   ├── prisma/         # Esquema Prisma, migraciones y seed
+│   ├── src/            # Controladores, rutas, servicios y middlewares
+│   └── tests/          # Pruebas unitarias y de integración (Jest)
+├── frontend/           # SPA (React, Vite, Tailwind CSS)
+│   └── src/            # Componentes, vistas, hooks y API client
+├── docs/               # Documentación técnica y sistema de diseño
+│   ├── API.md          # Referencia completa de endpoints REST
+│   ├── ARCHITECTURE.md # Arquitectura del sistema y modelos
+│   ├── DMS_IMPORT.md   # Guía de importación de órdenes DMS
+│   └── design/         # Mockups de Stitch y especificación de diseño
+├── config/             # docker-compose.yml para PostgreSQL local
+├── scripts/            # Scripts utilitarios y de automatización
+├── netlify.toml        # Configuración de despliegue en Netlify
+└── render.yaml         # Blueprint de infraestructura en Render
 ```
 
-Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para el razonamiento detrás de esta organización de carpetas.
+---
 
-## Inicio rápido
+## 🚀 Inicio Rápido (Desarrollo Local)
 
-Requisitos: Node.js 18+ y PostgreSQL (la forma más simple es Docker).
+### Requisitos previos
+- **Node.js** v18 o superior
+- **Docker & Docker Compose** (para PostgreSQL local) o un servidor PostgreSQL activo
 
+### 1. Iniciar Base de Datos
 ```bash
-# 0. Base de datos (PostgreSQL vía Docker Compose)
 docker compose -f config/docker-compose.yml up -d
+```
 
-# 1. Backend
+### 2. Configurar y Levantar Backend
+```bash
 cd backend
 cp .env.example .env
 npm install
-npm run prisma:migrate   # aplica el esquema contra Postgres
+npx prisma migrate dev
 npm run seed
-npm run dev              # http://localhost:4000
+npm run dev
+```
+*El backend se ejecutará en: `http://localhost:4000`*  
+*Usuario de prueba (generado por el seed):* `asesor@pitstop.mx` / `pitstop123`
 
-# 2. Frontend (en otra terminal)
-cd frontend
+### 3. Configurar y Levantar Frontend
+```bash
+cd ../frontend
 cp .env.example .env
 npm install
-npm run dev               # http://localhost:5173
+npm run dev
 ```
+*El frontend se ejecutará en: `http://localhost:5173`*
 
-En Windows con PowerShell también puedes usar `scripts/dev.ps1`, que hace los 3 pasos anteriores automáticamente.
+---
 
-**Usuario de prueba** (creado por el seed): `asesor@pitstop.mx` / `pitstop123`
+## 📚 Documentación
 
-## Despliegue
+- [Referencia de API REST](docs/API.md)
+- [Arquitectura del Sistema](docs/ARCHITECTURE.md)
+- [Importación desde DMS](docs/DMS_IMPORT.md)
+- [Guía de Backend](backend/README.md)
+- [Guía de Frontend](frontend/README.md)
 
-- **Frontend** (Netlify): `netlify.toml` en la raíz ya deja listo el build (`frontend` como base, `dist` como publish) y el redirect de SPA para React Router. Solo falta definir la variable de entorno `VITE_API_URL` en Netlify apuntando a la URL pública del backend.
-- **Backend** (Render): `render.yaml` en la raíz define un Blueprint que crea el web service y una base PostgreSQL administrada juntos. Al importar el repo en Render, solo falta fijar `CORS_ORIGIN` con la URL del sitio de Netlify (el resto de variables se generan/enlazan automáticamente).
+---
 
-## Documentación
+## 📄 Licencia
 
-- [Backend](backend/README.md)
-- [Frontend](frontend/README.md)
-- [API Reference](docs/API.md)
-- [Arquitectura](docs/ARCHITECTURE.md)
-- [Importación de órdenes desde el DMS](docs/DMS_IMPORT.md)
-- [Sistema de diseño (Kinetic Precision)](docs/design/DESIGN.md)
-
-## Alcance actual
-
-Implementado: autenticación de Service Advisor, órdenes de trabajo con stepper de estatus, búsqueda por orden/placas/VIN, clientes, vehículos, técnicos, estadísticas del día, lista de "Unidades en Proceso", importación idempotente de órdenes reales desde el DMS ([docs/DMS_IMPORT.md](docs/DMS_IMPORT.md)), y una página de **Configuración** para administrar técnicos y el mapeo de estatus del DMS.
-
-Fuera de alcance por ahora (decisión explícita, ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)): Inventario, Agenda y Reportes avanzados — quedan como enlaces deshabilitados en la UI. La sincronización *automática* con el DMS (sin correr el importador a mano) también queda pendiente hasta definir cómo el DMS entrega sus exports de forma recurrente.
+Desarrollado y mantenido por **Ivonne Courtois** (@ivonnecourtois123). Todos los derechos reservados.

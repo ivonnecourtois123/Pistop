@@ -2,6 +2,7 @@
   "name": "pitstop-backend",
   "version": "1.0.0",
   "description": "API REST para PitStop - Rastreador de estatus de servicio automotriz",
+  "author": "Ivonne Courtois <mejora.continua2@chesa.mx> (https://github.com/ivonnecourtois123)",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {

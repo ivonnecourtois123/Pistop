@@ -2,6 +2,7 @@
   "name": "pitstop-frontend",
   "private": true,
   "version": "1.0.0",
+  "author": "Ivonne Courtois <mejora.continua2@chesa.mx> (https://github.com/ivonnecourtois123)",
   "type": "module",
   "scripts": {
     "dev": "vite",
