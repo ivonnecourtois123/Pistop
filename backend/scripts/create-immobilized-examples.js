@@ -30,6 +30,7 @@ const EXAMPLES = [
       logoUrl: NISSAN_LOGO,
     },
     immobilized: {
+      agency: 'Tuxtla Poniente',
       treatmentType: 'GARANTIA',
       dmsReportNumber: 'REP-DMS-8429',
       description:
@@ -53,6 +54,7 @@ const EXAMPLES = [
       logoUrl: NISSAN_LOGO,
     },
     immobilized: {
+      agency: 'Tapachula',
       treatmentType: 'ASEGURADORA',
       description:
         'Impacto frontal derecho con daño en facia, faro LED y salpicadera. Unidad inmovilizada a la espera de valuación.',
@@ -115,6 +117,7 @@ async function main() {
         vehicleId: vehicle.id,
         damageDate: new Date().toISOString(),
         treatmentType: item.immobilized.treatmentType,
+        agency: item.immobilized.agency,
         dmsReportNumber: item.immobilized.dmsReportNumber,
         description: item.immobilized.description,
       }),

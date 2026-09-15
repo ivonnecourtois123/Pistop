@@ -264,6 +264,7 @@ model ImmobilizedUnit {
   treatmentType   String    // REPARACION_INTERNA | GARANTIA | ASEGURADORA
   dmsReportNumber String? // Número de reporte en el DMS — solo aplica si treatmentType = GARANTIA
   description     String?
+  agency          String?   // Agencia o sucursal a la que pertenece la unidad
   resolved        Boolean   @default(false)
   resolvedAt      DateTime?
   registeredById  String
@@ -276,6 +277,7 @@ model ImmobilizedUnit {
 
   @@index([treatmentType])
   @@index([resolved])
+  @@index([agency])
   @@map("immobilized_units")
 }
 

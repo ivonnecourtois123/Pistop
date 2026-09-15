@@ -36,3 +36,13 @@ export const DOCUMENT_TYPES = [
   { key: 'ID_DECLARACION', label: 'ID con declaración del accidente' },
   { key: 'FACTURA_MARCA', label: 'Factura Marca' },
 ];
+
+// Catálogo base de agencias / sucursales
+export const DEFAULT_AGENCIES = [
+  'Tuxtla Poniente',
+  'Tuxtla Oriente',
+  'Tapachula',
+  'San Cristóbal',
+  'Comitán',
+];
+

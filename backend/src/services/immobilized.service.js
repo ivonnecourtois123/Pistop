@@ -20,9 +20,16 @@ const INCLUDE_RELATIONS = {
   },
 };
 
-async function list({ resolved } = {}) {
+async function list({ resolved, agency } = {}) {
+  const where = {};
+  if (resolved !== undefined) {
+    where.resolved = resolved === 'true' || resolved === true;
+  }
+  if (agency) {
+    where.agency = agency;
+  }
   return prisma.immobilizedUnit.findMany({
-    where: resolved === undefined ? {} : { resolved: resolved === 'true' || resolved === true },
+    where,
     include: INCLUDE_RELATIONS,
     orderBy: { damageDate: 'desc' },
   });
@@ -53,6 +60,7 @@ async function create(data, userId) {
       treatmentType: data.treatmentType,
       dmsReportNumber: data.treatmentType === 'GARANTIA' ? data.dmsReportNumber ?? null : null,
       description: data.description ?? null,
+      agency: data.agency ?? null,
       registeredById: userId,
       ...(data.treatmentType === 'ASEGURADORA' ? { insuranceCase: buildInsuranceCaseCreate() } : {}),
     },
@@ -67,6 +75,7 @@ async function update(id, data) {
     data: {
       damageDate: data.damageDate ?? existing.damageDate,
       description: data.description !== undefined ? data.description : existing.description,
+      agency: data.agency !== undefined ? data.agency : existing.agency,
       dmsReportNumber:
         existing.treatmentType === 'GARANTIA'
           ? data.dmsReportNumber !== undefined

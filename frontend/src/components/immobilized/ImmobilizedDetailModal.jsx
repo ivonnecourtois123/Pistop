@@ -7,7 +7,7 @@ import {
   setImmobilizedResolved,
   addImmobilizedComment,
 } from '../../api/immobilized.js';
-import { TREATMENT_TYPES, TREATMENT_TYPE_LABELS } from '../../constants/immobilized.js';
+import { TREATMENT_TYPES, TREATMENT_TYPE_LABELS, DEFAULT_AGENCIES } from '../../constants/immobilized.js';
 
 function formatDateTime(dateString) {
   if (!dateString) return null;
@@ -29,6 +29,7 @@ function toDatetimeLocalValue(dateString) {
 export default function ImmobilizedDetailModal({ unit, onClose, onUpdated }) {
   const { vehicle } = unit;
   const [damageDate, setDamageDate] = useState(toDatetimeLocalValue(unit.damageDate));
+  const [agency, setAgency] = useState(unit.agency || '');
   const [description, setDescription] = useState(unit.description || '');
   const [dmsReportNumber, setDmsReportNumber] = useState(unit.dmsReportNumber || '');
   const [saving, setSaving] = useState(false);
@@ -40,6 +41,7 @@ export default function ImmobilizedDetailModal({ unit, onClose, onUpdated }) {
     try {
       const updated = await updateImmobilized(unit.id, {
         damageDate,
+        agency: agency.trim() || null,
         description: description.trim() || undefined,
         dmsReportNumber: unit.treatmentType === 'GARANTIA' ? dmsReportNumber.trim() || undefined : undefined,
       });
@@ -94,6 +96,7 @@ export default function ImmobilizedDetailModal({ unit, onClose, onUpdated }) {
             <h2 className="font-headline-lg text-headline-lg text-primary">Unidad Inmovilizada</h2>
             <p className="font-body-md text-on-surface-variant">
               {vehicle.brand} {vehicle.model} — {vehicle.plate}
+              {unit.agency ? ` • Agencia: ${unit.agency}` : ''}
             </p>
           </div>
           <button
@@ -183,6 +186,24 @@ export default function ImmobilizedDetailModal({ unit, onClose, onUpdated }) {
               onChange={(e) => setDamageDate(e.target.value)}
               className="block w-full rounded-lg border border-outline-variant bg-white px-4 py-3 font-body-md text-primary"
             />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block font-label-caps text-label-caps text-on-surface-variant">
+              AGENCIA / SUCURSAL
+            </span>
+            <input
+              list="detail-immobilized-agencies"
+              value={agency}
+              onChange={(e) => setAgency(e.target.value)}
+              placeholder="Selecciona o escribe la agencia (Ej. Tuxtla Poniente)"
+              className="block w-full rounded-lg border border-outline-variant bg-white px-4 py-3 font-body-md text-primary"
+            />
+            <datalist id="detail-immobilized-agencies">
+              {DEFAULT_AGENCIES.map((ag) => (
+                <option key={ag} value={ag} />
+              ))}
+            </datalist>
           </label>
 
           <label className="block">

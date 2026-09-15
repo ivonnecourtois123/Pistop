@@ -2,7 +2,7 @@ import { useState } from 'react';
 import VehiclePicker, { EMPTY_VEHICLE_DRAFT, resolveVehicleId } from './VehiclePicker.jsx';
 import CameraPlaceholderButton from './CameraPlaceholderButton.jsx';
 import { createImmobilized } from '../../api/immobilized.js';
-import { TREATMENT_TYPES, TREATMENT_TYPE_LABELS } from '../../constants/immobilized.js';
+import { TREATMENT_TYPES, TREATMENT_TYPE_LABELS, DEFAULT_AGENCIES } from '../../constants/immobilized.js';
 
 function nowForDatetimeLocal() {
   const now = new Date();
@@ -14,6 +14,7 @@ export default function NewImmobilizedModal({ onClose, onCreated }) {
   const [vehicleDraft, setVehicleDraft] = useState(EMPTY_VEHICLE_DRAFT);
   const [damageDate, setDamageDate] = useState(nowForDatetimeLocal());
   const [treatmentType, setTreatmentType] = useState('REPARACION_INTERNA');
+  const [agency, setAgency] = useState('');
   const [dmsReportNumber, setDmsReportNumber] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -29,6 +30,7 @@ export default function NewImmobilizedModal({ onClose, onCreated }) {
         vehicleId,
         damageDate,
         treatmentType,
+        agency: agency.trim() || undefined,
         dmsReportNumber: treatmentType === 'GARANTIA' ? dmsReportNumber.trim() || undefined : undefined,
         description: description.trim() || undefined,
       });
@@ -78,6 +80,24 @@ export default function NewImmobilizedModal({ onClose, onCreated }) {
               onChange={(e) => setDamageDate(e.target.value)}
               className="block w-full rounded-lg border border-outline-variant bg-white px-4 py-3 font-body-md text-primary"
             />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block font-label-caps text-label-caps text-on-surface-variant">
+              AGENCIA / SUCURSAL
+            </span>
+            <input
+              list="new-immobilized-agencies"
+              value={agency}
+              onChange={(e) => setAgency(e.target.value)}
+              placeholder="Selecciona o escribe la agencia (Ej. Tuxtla Poniente)"
+              className="block w-full rounded-lg border border-outline-variant bg-white px-4 py-3 font-body-md text-primary"
+            />
+            <datalist id="new-immobilized-agencies">
+              {DEFAULT_AGENCIES.map((ag) => (
+                <option key={ag} value={ag} />
+              ))}
+            </datalist>
           </label>
 
           <div>

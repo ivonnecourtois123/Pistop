@@ -33,12 +33,21 @@ export default function ImmobilizedList({ units, onSelect }) {
                 {unit.vehicle.brand} {unit.vehicle.model} — {unit.vehicle.plate}
               </p>
               <p className="font-data-mono text-xs text-on-surface-variant">
+                {unit.agency ? <span className="font-semibold text-primary">{unit.agency} • </span> : null}
                 Daño: {formatDate(unit.damageDate)}
                 {unit.treatmentType === 'GARANTIA' && unit.dmsReportNumber ? ` • Reporte DMS: ${unit.dmsReportNumber}` : ''}
               </p>
             </div>
 
-            <div className="flex items-center gap-3 pl-0 md:pl-0">
+            <div className="flex flex-wrap items-center gap-2">
+              {unit.agency && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-outline-variant bg-surface-container px-2.5 py-0.5 font-label-caps text-[11px] text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[13px]" data-icon="store">
+                    store
+                  </span>
+                  {unit.agency}
+                </span>
+              )}
               <span
                 className={`whitespace-nowrap rounded-full px-3 py-1 font-label-caps text-[11px] ${
                   unit.resolved ? 'bg-primary/10 text-primary' : 'bg-error-container/40 text-on-error-container'

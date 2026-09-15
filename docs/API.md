@@ -96,10 +96,10 @@ que no está en la tabla — se administra desde la página **Configuración** d
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/immobilized?resolved=` | Lista unidades. `resolved` (`true`\|`false`) filtra opcionalmente |
+| GET | `/immobilized?resolved=&agency=` | Lista unidades. `resolved` (`true`\|`false`) y `agency` filtran opcionalmente |
 | GET | `/immobilized/:id` | Detalle |
-| POST | `/immobilized` | Crea. Body: `{ vehicleId, damageDate, treatmentType, dmsReportNumber?, description? }`. `treatmentType`: `REPARACION_INTERNA` \| `GARANTIA` \| `ASEGURADORA`. Si es `ASEGURADORA`, crea automáticamente el `InsuranceCase` + checklist de 6 documentos |
-| PATCH | `/immobilized/:id` | Actualiza `damageDate`/`description`/`dmsReportNumber` (este último solo aplica si el tratamiento vigente es `GARANTIA`) |
+| POST | `/immobilized` | Crea. Body: `{ vehicleId, damageDate, treatmentType, agency?, dmsReportNumber?, description? }`. `treatmentType`: `REPARACION_INTERNA` \| `GARANTIA` \| `ASEGURADORA`. Si es `ASEGURADORA`, crea automáticamente el `InsuranceCase` + checklist de 6 documentos |
+| PATCH | `/immobilized/:id` | Actualiza `damageDate`/`description`/`agency`/`dmsReportNumber` (este último solo aplica si el tratamiento vigente es `GARANTIA`) |
 | PATCH | `/immobilized/:id/treatment-type` | Cambia el tratamiento. Body: `{ treatmentType }`. Pasar a `ASEGURADORA` crea el `InsuranceCase` si no existe; salir de `GARANTIA` limpia `dmsReportNumber` |
 | PATCH | `/immobilized/:id/resolved` | Marca/desmarca como resuelta. Body: `{ resolved }` |
 | POST | `/immobilized/:id/comments` | Agrega un comentario de seguimiento (un solo hilo por unidad, sin etapa). Body: `{ comment }`. El usuario se toma del token |

@@ -8,12 +8,14 @@ const createSchema = z.object({
   treatmentType: z.enum(TREATMENT_TYPES),
   dmsReportNumber: z.string().optional(),
   description: z.string().optional(),
+  agency: z.string().trim().min(1).optional(),
 });
 
 const updateSchema = z.object({
   damageDate: z.coerce.date().optional(),
   dmsReportNumber: z.string().optional(),
   description: z.string().optional(),
+  agency: z.string().trim().min(1).optional().nullable(),
 });
 
 const treatmentTypeSchema = z.object({
@@ -29,8 +31,8 @@ const commentSchema = z.object({
 });
 
 async function list(req, res) {
-  const { resolved } = req.query;
-  res.json(await service.list({ resolved }));
+  const { resolved, agency } = req.query;
+  res.json(await service.list({ resolved, agency }));
 }
 
 async function getOne(req, res) {
