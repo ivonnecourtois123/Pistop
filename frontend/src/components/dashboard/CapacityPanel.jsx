@@ -189,9 +189,6 @@ export default function CapacityPanel({ team, refreshKey }) {
           <span className="font-label-caps uppercase tracking-wider text-[10px] text-on-surface-variant font-bold">
             DISTRIBUCIÓN DE LA JORNADA
           </span>
-          <span className="text-[10px] font-data-mono font-medium text-on-surface-variant/80">
-            Capacidad total: {isHyp ? `${capacityUnits} unidades` : `${capacityHours.toFixed(1)} h/día`}
-          </span>
         </div>
 
         {/* Progress bar con guías / texto directamente sobre las barras */}
