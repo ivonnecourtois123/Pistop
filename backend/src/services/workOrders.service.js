@@ -430,12 +430,23 @@ async function statsToday(orderType) {
 // aparte). HYP no usa horas: sus órdenes duran días, no horas, así que se mide en cupo de
 // unidades simultáneas (técnicos × unitsPerTechnician) contra el conteo de órdenes HYP en proceso.
 async function capacityFor(team) {
+  const today0 = startOfToday();
+
   const [settings, technicians, inProgress] = await Promise.all([
     prisma.capacitySettings.findUnique({ where: { team } }),
     prisma.technician.findMany({ where: { team, active: true } }),
     prisma.workOrder.findMany({
-      where: { orderType: team, status: { not: 'ENTREGADO' } },
-      select: { serviceCategory: true },
+      where: { orderType: team, status: { notIn: ['ENTREGADO', 'TERMINADO'] } },
+      select: {
+        id: true,
+        orderNumber: true,
+        serviceCategory: true,
+        receivedAt: true,
+        technicianAssignedAt: true,
+        estimatedDeliveryAt: true,
+        technicianId: true,
+        status: true,
+      },
     }),
   ]);
 
@@ -444,41 +455,124 @@ async function capacityFor(team) {
   if (team === 'HYP') {
     const unitsPerTechnician = settings?.unitsPerTechnician ?? 0;
     const capacityUnits = technicianCount * unitsPerTechnician;
-    const demandUnits = inProgress.length;
+    
+    let carryoverUnits = 0;
+    let todayUnits = 0;
+    for (const wo of inProgress) {
+      const rec = wo.receivedAt ? new Date(wo.receivedAt) : null;
+      if (rec && rec < today0) {
+        carryoverUnits += 1;
+      } else {
+        todayUnits += 1;
+      }
+    }
+    const demandUnits = carryoverUnits + todayUnits;
+    const availableUnits = Math.max(0, capacityUnits - demandUnits);
+
     return {
       team,
       technicianCount,
+      unitsPerTechnician,
       capacityUnits,
       demandUnits,
+      carryoverUnits,
+      todayUnits,
+      availableUnits,
       utilization: capacityUnits > 0 ? demandUnits / capacityUnits : null,
     };
   }
 
-  const hoursPerDay = settings?.hoursPerDay ?? 0;
+  const hoursPerDay = settings?.hoursPerDay ?? 8;
   const efficiency = settings?.efficiency ?? 1;
   const productivity = settings?.productivity ?? 1;
-  const capacityHours = technicianCount * hoursPerDay * efficiency * productivity;
+  const hoursPerTech = hoursPerDay * efficiency * productivity;
+  const capacityHours = technicianCount * hoursPerTech;
 
   const categoryHoursRows = await prisma.serviceCategoryHours.findMany();
   const hoursByCategory = Object.fromEntries(categoryHoursRows.map((r) => [r.category, r.hours]));
 
   let demandHours = 0;
+  let carryoverHours = 0;
+  let todayDemandHours = 0;
+  let carryoverCount = 0;
+  let todayDemandCount = 0;
   let unclassifiedCount = 0;
+
+  // Mapa de carga individual por técnico
+  const techMap = new Map();
+  for (const tech of technicians) {
+    techMap.set(tech.id, {
+      id: tech.id,
+      name: tech.name,
+      capacityHours: hoursPerTech,
+      assignedHours: 0,
+      carryoverHours: 0,
+      todayHours: 0,
+      ordersCount: 0,
+    });
+  }
+
   for (const wo of inProgress) {
-    if (wo.serviceCategory && hoursByCategory[wo.serviceCategory] != null) {
-      demandHours += hoursByCategory[wo.serviceCategory];
+    const isCarryover = wo.receivedAt && new Date(wo.receivedAt) < today0;
+    const stdHours = wo.serviceCategory && hoursByCategory[wo.serviceCategory] != null
+      ? hoursByCategory[wo.serviceCategory]
+      : null;
+
+    if (stdHours != null) {
+      demandHours += stdHours;
+      if (isCarryover) {
+        carryoverHours += stdHours;
+        carryoverCount += 1;
+      } else {
+        todayDemandHours += stdHours;
+        todayDemandCount += 1;
+      }
+
+      if (wo.technicianId && techMap.has(wo.technicianId)) {
+        const t = techMap.get(wo.technicianId);
+        t.assignedHours += stdHours;
+        t.ordersCount += 1;
+        if (isCarryover) {
+          t.carryoverHours += stdHours;
+        } else {
+          t.todayHours += stdHours;
+        }
+      }
     } else {
       unclassifiedCount += 1;
+      if (isCarryover) {
+        carryoverCount += 1;
+      } else {
+        todayDemandCount += 1;
+      }
     }
   }
+
+  const availableHours = Math.max(0, capacityHours - demandHours);
+
+  const technicianBreakdown = Array.from(techMap.values()).map((t) => ({
+    ...t,
+    availableHours: Math.max(0, t.capacityHours - t.assignedHours),
+    utilization: t.capacityHours > 0 ? t.assignedHours / t.capacityHours : 0,
+    isOverloaded: t.assignedHours > t.capacityHours,
+  }));
 
   return {
     team,
     technicianCount,
+    hoursPerDay,
+    efficiency,
+    productivity,
     capacityHours,
     demandHours,
+    carryoverHours,
+    todayDemandHours,
+    carryoverCount,
+    todayDemandCount,
+    availableHours,
     unclassifiedCount,
     utilization: capacityHours > 0 ? demandHours / capacityHours : null,
+    technicianBreakdown,
   };
 }
 

@@ -82,16 +82,25 @@ function unitsForSelectedDate(workOrders, selectedDate) {
 const byTime = (a, b) => new Date(a.estimatedDeliveryAt) - new Date(b.estimatedDeliveryAt);
 const NO_TIME_COLUMN = { key: 'none', label: 'Sin hora definida' };
 
+const WORKSHOP_DEFAULT_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+
 // Matriz técnico × hora de entrega para el día seleccionado: filas = técnicos (con "Sin
-// asignar" al final), columnas = horas con unidades (+ "Sin hora definida"). Cada celda apila
-// las unidades de ese técnico en esa hora, si hay más de una.
-function buildMatrix(workOrders, selectedDate) {
+// asignar" al final), columnas = horas con unidades (+ "Sin hora definida").
+function buildMatrix(workOrders, selectedDate, fullDayMode = true) {
   const { withHour, noTime } = unitsForSelectedDate(workOrders, selectedDate);
 
-  const hours = new Set(withHour.map((wo) => new Date(wo.estimatedDeliveryAt).getHours()));
-  const columns = [...hours]
-    .sort((a, b) => a - b)
-    .map((h) => ({ key: `hour-${h}`, label: formatHour(h) }));
+  const orderHours = withHour.map((wo) => new Date(wo.estimatedDeliveryAt).getHours());
+  
+  let hoursList;
+  if (fullDayMode) {
+    const combined = new Set([...WORKSHOP_DEFAULT_HOURS, ...orderHours]);
+    hoursList = [...combined].sort((a, b) => a - b);
+  } else {
+    const combined = new Set(orderHours);
+    hoursList = [...combined].sort((a, b) => a - b);
+  }
+
+  const columns = hoursList.map((h) => ({ key: `hour-${h}`, hour: h, label: formatHour(h) }));
   if (noTime.length) columns.push(NO_TIME_COLUMN);
 
   const technicianNames = new Set();
@@ -120,8 +129,7 @@ function buildMatrix(workOrders, selectedDate) {
   return { rows, columns, cells };
 }
 
-// Otros días (de hoy en adelante) que tienen entregas programadas, para saltar directo a ellos
-// sin ir avanzando de uno en uno.
+// Otros días (de hoy en adelante) que tienen entregas programadas
 function upcomingDaysWithOrders(workOrders, selectedDate) {
   const today0 = startOfToday();
   const counts = new Map();
@@ -139,23 +147,36 @@ function upcomingDaysWithOrders(workOrders, selectedDate) {
     .map(([key, count]) => ({ key, date: fromDateInputValue(key), count }));
 }
 
-// Solo de consulta: el magnetoplano no abre edición — eso vive únicamente en la lista de
-// Unidades en Proceso. El número de orden es el dato principal (placa como secundario), y la
-// etapa se muestra como referencia visual, no como control.
-// Detalle de solo consulta. El magnetoplano no abre edición (eso vive en Unidades en Proceso);
-// aquí solo se explica el color, que de otro modo depende de pasar el mouse por encima.
-function CardDetailPopover({ workOrder, progress, onClose, onSelect, align }) {
+function CardDetailPopover({ workOrder, progress, standardHours, onClose, onSelect, align }) {
   const alignClass = align === 'left' ? 'left-0' : align === 'right' ? 'right-0' : 'left-1/2 -translate-x-1/2';
+  const today0 = startOfToday();
+  const isCarryover = workOrder.receivedAt && new Date(workOrder.receivedAt) < today0;
+  const std = workOrder.serviceCategory && standardHours ? standardHours[workOrder.serviceCategory] : null;
+
+  // Cálculo de horario estimado de ejecución
+  let startEstText = null;
+  if (workOrder.estimatedDeliveryAt && std) {
+    const delivery = new Date(workOrder.estimatedDeliveryAt);
+    const startEst = new Date(delivery.getTime() - std * 60 * 60 * 1000);
+    startEstText = `${startEst.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} → ${delivery.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
+  }
 
   return (
     <div
       data-card-detail
-      className={`absolute top-full z-50 mt-2 w-64 max-w-[85vw] rounded-xl border border-outline-variant bg-white p-3.5 text-left shadow-xl ${alignClass}`}
+      className={`absolute top-full z-50 mt-2 w-72 max-w-[90vw] rounded-xl border border-outline-variant bg-white p-3.5 text-left shadow-xl ${alignClass}`}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="mb-2 flex items-start justify-between gap-2">
         <div>
-          <p className="font-body-md text-sm font-bold text-primary">#{workOrder.orderNumber}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="font-body-md text-sm font-bold text-primary">#{workOrder.orderNumber}</p>
+            {isCarryover && (
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 font-label-caps text-[9px] font-black text-amber-900 border border-amber-300">
+                Arrastre de ayer
+              </span>
+            )}
+          </div>
           <p className="font-data-mono text-[11px] text-on-surface-variant font-medium">{workOrder.vehicle?.plate || 'Sin placas'}</p>
         </div>
         <button
@@ -178,7 +199,25 @@ function CardDetailPopover({ workOrder, progress, onClose, onSelect, align }) {
           <dd className="text-right text-primary font-medium">{workOrder.technician?.name?.trim() || 'Sin asignar'}</dd>
         </div>
         <div className="flex items-baseline justify-between gap-2">
-          <dt className="font-label-caps text-[10px] text-on-surface-variant font-semibold">Promesa</dt>
+          <dt className="font-label-caps text-[10px] text-on-surface-variant font-semibold">Tipo Servicio</dt>
+          <dd className="text-right font-semibold text-primary">
+            {workOrder.serviceCategory || workOrder.serviceType || 'Sin clasificar'}
+          </dd>
+        </div>
+        {std != null && (
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="font-label-caps text-[10px] text-on-surface-variant font-semibold">Tiempo Estándar</dt>
+            <dd className="text-right font-data-mono font-bold text-amber-800">{std} h</dd>
+          </div>
+        )}
+        {startEstText && (
+          <div className="flex items-baseline justify-between gap-2">
+            <dt className="font-label-caps text-[10px] text-on-surface-variant font-semibold">Horario Estimado</dt>
+            <dd className="text-right font-data-mono font-bold text-blue-800">{startEstText}</dd>
+          </div>
+        )}
+        <div className="flex items-baseline justify-between gap-2">
+          <dt className="font-label-caps text-[10px] text-on-surface-variant font-semibold">Promesa Entrega</dt>
           <dd className="text-right font-data-mono text-primary font-bold">
             {workOrder.estimatedDeliveryAt
               ? new Date(workOrder.estimatedDeliveryAt).toLocaleString('es-MX', {
@@ -225,6 +264,9 @@ function CardDetailPopover({ workOrder, progress, onClose, onSelect, align }) {
 function VehicleCard({ workOrder, standardHours, open, onToggle, onSelect, align }) {
   const { vehicle } = workOrder;
   const progress = standardHours ? computeWorkProgress(workOrder, standardHours) : null;
+  const today0 = startOfToday();
+  const isCarryover = workOrder.receivedAt && new Date(workOrder.receivedAt) < today0;
+  const stdHours = workOrder.serviceCategory && standardHours ? standardHours[workOrder.serviceCategory] : null;
 
   return (
     <div className={`relative w-full ${open ? 'z-50' : ''}`}>
@@ -237,24 +279,43 @@ function VehicleCard({ workOrder, standardHours, open, onToggle, onSelect, align
           progress ? `border-l-4 ${PROGRESS_STRIPE_CLASS[progress.level]}` : ''
         }`}
       >
-        <span className="flex items-center gap-1.5">
-          {progress && (
-            <span
-              title={progress.label}
-              className={`h-2 w-2 shrink-0 rounded-full ${PROGRESS_DOT_CLASS[progress.level]}`}
-            />
-          )}
-          <span className="truncate font-body-md text-sm font-semibold text-primary">#{workOrder.orderNumber}</span>
+        <div className="flex items-center justify-between gap-1">
+          <span className="flex items-center gap-1.5 min-w-0">
+            {progress && (
+              <span
+                title={progress.label}
+                className={`h-2 w-2 shrink-0 rounded-full ${PROGRESS_DOT_CLASS[progress.level]}`}
+              />
+            )}
+            <span className="truncate font-body-md text-sm font-semibold text-primary">#{workOrder.orderNumber}</span>
+          </span>
           <span className="shrink-0 font-data-mono text-[11px] text-on-surface-variant">{vehicle?.plate || 'Sin placas'}</span>
+        </div>
+
+        {/* Distintivos de Arrastre y Horas */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {isCarryover && (
+            <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-900 border border-amber-300">
+              <span className="material-symbols-outlined text-[11px] text-amber-700">inventory_2</span>
+              Arrastre
+            </span>
+          )}
+          {stdHours != null && (
+            <span className="font-data-mono text-[10px] font-bold text-primary/80 bg-surface-container px-1.5 py-0.5 rounded">
+              ⏱️ {stdHours}h
+            </span>
+          )}
           {workOrder.customerWaiting && (
             <span className="material-symbols-outlined shrink-0 text-sm text-error" title="Cliente espera" data-icon="schedule">
               schedule
             </span>
           )}
-        </span>
+        </div>
+
         <span className="truncate font-data-mono text-[11px] text-on-surface-variant">
           {vehicle?.brand} {vehicle?.model}
         </span>
+        
         <span
           className={`w-fit whitespace-nowrap rounded-full px-2 py-0.5 font-label-caps text-[10px] ${statusBadgeClass(workOrder.status)}`}
         >
@@ -266,6 +327,7 @@ function VehicleCard({ workOrder, standardHours, open, onToggle, onSelect, align
         <CardDetailPopover
           workOrder={workOrder}
           progress={progress}
+          standardHours={standardHours}
           onClose={onToggle}
           onSelect={onSelect}
           align={align}
@@ -279,6 +341,7 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
   const [collapsed, setCollapsed] = useState(false);
   const [selectedDate, setSelectedDate] = useState(startOfToday);
   const [openCardId, setOpenCardId] = useState(null);
+  const [fullDayMode, setFullDayMode] = useState(true);
 
   useEffect(() => {
     if (!openCardId) return undefined;
@@ -291,11 +354,27 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [openCardId]);
 
-  const { rows, columns, cells } = useMemo(() => buildMatrix(workOrders, selectedDate), [workOrders, selectedDate]);
+  const { rows, columns, cells } = useMemo(
+    () => buildMatrix(workOrders, selectedDate, fullDayMode),
+    [workOrders, selectedDate, fullDayMode]
+  );
+
   const otherDays = useMemo(() => upcomingDaysWithOrders(workOrders, selectedDate), [workOrders, selectedDate]);
 
   const isToday = isSameDay(selectedDate, startOfToday());
   const totalCount = [...cells.values()].reduce((sum, items) => sum + items.length, 0);
+
+  // Horas asignadas por cada técnico en el día seleccionado
+  const techHoursMap = useMemo(() => {
+    const map = new Map();
+    const { withHour, noTime } = unitsForSelectedDate(workOrders, selectedDate);
+    for (const wo of [...withHour, ...noTime]) {
+      const name = wo.technician?.name || 'Sin asignar';
+      const std = wo.serviceCategory && standardHours ? standardHours[wo.serviceCategory] : 1.0;
+      map.set(name, (map.get(name) || 0) + std);
+    }
+    return map;
+  }, [workOrders, selectedDate, standardHours]);
 
   // Indicadores operativos dinámicos para la barra del calendario
   const computedOpStats = useMemo(() => {
@@ -338,7 +417,7 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
           <span className="material-symbols-outlined text-primary" data-icon="dashboard">
             dashboard
           </span>
-          <h3 className="font-headline-md text-base font-black text-primary">Horas Promesa de Entrega</h3>
+          <h3 className="font-headline-md text-base font-black text-primary">Horas Promesa de Entrega (Magnetoplano)</h3>
         </div>
         <span className="material-symbols-outlined text-on-surface-variant" data-icon={collapsed ? 'expand_more' : 'expand_less'}>
           {collapsed ? 'expand_more' : 'expand_less'}
@@ -424,29 +503,60 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
               </div>
             </div>
 
-            <span className="font-label-caps text-[11px] text-on-surface-variant font-bold">
-              {totalCount} unidad(es)
-            </span>
+            {/* Toggle Jornada Completa / Solo con Citas */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setFullDayMode((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-bold transition-colors cursor-pointer ${
+                  fullDayMode
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800 shadow-2xs'
+                    : 'border-outline-variant bg-white text-on-surface-variant hover:text-primary'
+                }`}
+                title="Muestra todas las franjas horarias de 08:00 a 18:00 para identificar huecos y slots libres"
+              >
+                <span className="material-symbols-outlined text-sm">
+                  {fullDayMode ? 'grid_view' : 'filter_list'}
+                </span>
+                <span>{fullDayMode ? 'Jornada Completa (Slots)' : 'Solo con Citas'}</span>
+              </button>
+
+              <span className="font-label-caps text-[11px] text-on-surface-variant font-bold">
+                {totalCount} unidad(es)
+              </span>
+            </div>
           </div>
 
-          {/* Leyenda: el color solo sirve si se sabe qué mide. Va aquí y no en la tabla porque
-              este es el tablero de referencia, donde se lee a distancia. */}
-          {standardHours && (
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <span className="font-label-caps text-[11px] text-on-surface-variant">Avance vs. tiempo estándar:</span>
-              {[
-                { level: 'OK', label: 'A tiempo' },
-                { level: 'WARN', label: 'Por vencer' },
-                { level: 'LATE', label: 'Excedido' },
-                { level: 'UNKNOWN', label: 'Sin dato' },
-              ].map((l) => (
-                <span key={l.level} className="flex items-center gap-1.5 font-label-caps text-[10px] text-on-surface-variant">
-                  <span className={`h-2 w-2 rounded-full ${PROGRESS_DOT_CLASS[l.level]}`} />
-                  {l.label}
-                </span>
-              ))}
+          {/* Leyenda y referencia rápida */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/60 pb-2">
+            {standardHours && (
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="font-label-caps text-[11px] text-on-surface-variant font-bold">Semáforo de avance:</span>
+                {[
+                  { level: 'OK', label: 'A tiempo' },
+                  { level: 'WARN', label: 'Por vencer' },
+                  { level: 'LATE', label: 'Excedido' },
+                  { level: 'UNKNOWN', label: 'Sin dato' },
+                ].map((l) => (
+                  <span key={l.level} className="flex items-center gap-1.5 font-label-caps text-[10px] text-on-surface-variant">
+                    <span className={`h-2 w-2 rounded-full ${PROGRESS_DOT_CLASS[l.level]}`} />
+                    {l.label}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 text-[10px] font-label-caps text-on-surface-variant">
+              <span className="flex items-center gap-1 text-emerald-800 font-bold">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                Slot Libre / Disponible
+              </span>
+              <span className="flex items-center gap-1 text-amber-800 font-bold">
+                <span className="material-symbols-outlined text-xs text-amber-600">inventory_2</span>
+                Carga de ayer (Arrastre)
+              </span>
             </div>
-          )}
+          </div>
 
           {otherDays.length > 0 && (
             <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -473,13 +583,13 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
               <table className="w-full min-w-max border-collapse text-left">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 z-10 bg-surface-container-lowest px-2 py-1 font-label-caps text-[11px] uppercase tracking-wider text-on-surface-variant">
-                      Técnico
+                    <th className="sticky left-0 z-20 bg-surface-container-lowest px-3 py-2 font-label-caps text-[11px] uppercase tracking-wider text-on-surface-variant min-w-[12rem]">
+                      Técnico & Ocupación
                     </th>
                     {columns.map((col) => (
                       <th
                         key={col.key}
-                        className="min-w-[11rem] whitespace-nowrap rounded-t bg-primary/10 px-3 py-1 font-label-caps text-[11px] uppercase tracking-wider text-primary"
+                        className="min-w-[11.5rem] whitespace-nowrap rounded-t bg-primary/10 px-3 py-1.5 font-label-caps text-[11px] uppercase tracking-wider text-primary text-center"
                       >
                         {col.label}
                       </th>
@@ -487,39 +597,84 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((technicianName) => (
-                    <tr key={technicianName} className="border-t border-outline-variant">
-                      <td className="sticky left-0 z-10 bg-surface-container-lowest px-2 py-2 align-top font-body-md text-sm font-semibold text-primary">
-                        {technicianName}
-                      </td>
-                      {columns.map((col, colIndex) => {
-                        const items = cells.get(`${technicianName}__${col.key}`) || [];
-                        // El popover es más ancho que una columna: en los extremos se ancla al
-                        // borde de la tarjeta en vez de centrarse, para no salirse del tablero.
-                        const align =
-                          colIndex === 0 ? 'left' : colIndex === columns.length - 1 ? 'right' : 'center';
-                        return (
-                          <td key={col.key} className="px-2 py-2 align-top">
-                            {items.length > 0 && (
-                              <div className="flex flex-col gap-2">
-                                {items.map((wo) => (
-                                  <VehicleCard
-                                    key={wo.id}
-                                    workOrder={wo}
-                                    standardHours={standardHours}
-                                    align={align}
-                                    open={openCardId === wo.id}
-                                    onToggle={() => setOpenCardId((prev) => (prev === wo.id ? null : wo.id))}
-                                    onSelect={onSelect}
-                                  />
-                                ))}
+                  {rows.map((technicianName) => {
+                    const assignedHrs = techHoursMap.get(technicianName) || 0;
+                    const shiftHours = 8.0;
+                    const isUnassigned = technicianName === 'Sin asignar';
+                    const techPct = Math.round((assignedHrs / shiftHours) * 100);
+                    const isOverloaded = assignedHrs > shiftHours;
+
+                    return (
+                      <tr key={technicianName} className="border-t border-outline-variant hover:bg-surface-container/20">
+                        {/* Cabecera de fila con indicador de carga y semáforo individual */}
+                        <td className="sticky left-0 z-10 bg-surface-container-lowest px-3 py-3 align-top">
+                          <div className="flex flex-col gap-1">
+                            <span className="font-body-md text-sm font-bold text-primary">
+                              {technicianName}
+                            </span>
+                            {!isUnassigned && (
+                              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                <span
+                                  className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold font-data-mono border ${
+                                    isOverloaded
+                                      ? 'bg-rose-100 text-rose-800 border-rose-300'
+                                      : assignedHrs >= 6.5
+                                      ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                      : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                  }`}
+                                >
+                                  {assignedHrs.toFixed(1)}h / {shiftHours.toFixed(1)}h ({techPct}%)
+                                </span>
+                                <span className={`text-[9px] font-bold ${isOverloaded ? 'text-rose-700' : 'text-emerald-700'}`}>
+                                  {isOverloaded ? '🚨 Saturado' : '🟢 Libre'}
+                                </span>
                               </div>
                             )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                          </div>
+                        </td>
+
+                        {/* Columnas de horas / slots */}
+                        {columns.map((col, colIndex) => {
+                          const items = cells.get(`${technicianName}__${col.key}`) || [];
+                          const align =
+                            colIndex === 0 ? 'left' : colIndex === columns.length - 1 ? 'right' : 'center';
+
+                          return (
+                            <td key={col.key} className="px-2 py-2 align-top">
+                              {items.length > 0 ? (
+                                <div className="flex flex-col gap-2">
+                                  {items.map((wo) => (
+                                    <VehicleCard
+                                      key={wo.id}
+                                      workOrder={wo}
+                                      standardHours={standardHours}
+                                      align={align}
+                                      open={openCardId === wo.id}
+                                      onToggle={() => setOpenCardId((prev) => (prev === wo.id ? null : wo.id))}
+                                      onSelect={onSelect}
+                                    />
+                                  ))}
+                                </div>
+                              ) : col.key !== 'none' && !isUnassigned ? (
+                                /* Slot Vacío / Disponible para programar */
+                                <div
+                                  title={`Horario ${col.label} disponible para ${technicianName}`}
+                                  className="flex h-12 w-full items-center justify-center rounded-lg border border-dashed border-emerald-300/50 bg-emerald-50/20 px-2 text-center text-[10px] font-semibold text-emerald-800/70 hover:bg-emerald-50/70 hover:border-emerald-400 transition-colors"
+                                >
+                                  <span className="flex items-center gap-1 font-label-caps">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                    Libre ({col.label})
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="h-10 w-full" />
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
