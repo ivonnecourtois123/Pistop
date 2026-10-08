@@ -264,9 +264,6 @@ function CardDetailPopover({ workOrder, progress, standardHours, onClose, onSele
 function VehicleCard({ workOrder, standardHours, open, onToggle, onSelect, align }) {
   const { vehicle } = workOrder;
   const progress = standardHours ? computeWorkProgress(workOrder, standardHours) : null;
-  const today0 = startOfToday();
-  const isCarryover = workOrder.receivedAt && new Date(workOrder.receivedAt) < today0;
-  const stdHours = workOrder.serviceCategory && standardHours ? standardHours[workOrder.serviceCategory] : null;
 
   return (
     <div className={`relative w-full ${open ? 'z-50' : ''}`}>
@@ -274,52 +271,16 @@ function VehicleCard({ workOrder, standardHours, open, onToggle, onSelect, align
         type="button"
         data-card-trigger
         onClick={onToggle}
-        title="Ver estatus y semáforo"
-        className={`flex w-full flex-col gap-1 rounded-lg border border-outline-variant bg-white px-3 py-2 text-left transition-colors hover:border-primary cursor-pointer shadow-2xs ${
+        title="Clic para ver detalle de la orden"
+        className={`flex w-full flex-col gap-0.5 rounded-lg border border-outline-variant bg-white px-2.5 py-1.5 text-left transition-all hover:border-primary hover:shadow-xs cursor-pointer shadow-2xs ${
           progress ? `border-l-4 ${PROGRESS_STRIPE_CLASS[progress.level]}` : ''
         }`}
       >
-        <div className="flex items-center justify-between gap-1">
-          <span className="flex items-center gap-1.5 min-w-0">
-            {progress && (
-              <span
-                title={progress.label}
-                className={`h-2 w-2 shrink-0 rounded-full ${PROGRESS_DOT_CLASS[progress.level]}`}
-              />
-            )}
-            <span className="truncate font-body-md text-sm font-semibold text-primary">#{workOrder.orderNumber}</span>
-          </span>
-          <span className="shrink-0 font-data-mono text-[11px] text-on-surface-variant">{vehicle?.plate || 'Sin placas'}</span>
-        </div>
-
-        {/* Distintivos de Arrastre y Horas */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {isCarryover && (
-            <span className="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-black text-amber-900 border border-amber-300">
-              <span className="material-symbols-outlined text-[11px] text-amber-700">inventory_2</span>
-              Arrastre
-            </span>
-          )}
-          {stdHours != null && (
-            <span className="font-data-mono text-[10px] font-bold text-primary/80 bg-surface-container px-1.5 py-0.5 rounded">
-              ⏱️ {stdHours}h
-            </span>
-          )}
-          {workOrder.customerWaiting && (
-            <span className="material-symbols-outlined shrink-0 text-sm text-error" title="Cliente espera" data-icon="schedule">
-              schedule
-            </span>
-          )}
-        </div>
-
-        <span className="truncate font-data-mono text-[11px] text-on-surface-variant">
-          {vehicle?.brand} {vehicle?.model}
+        <span className="truncate font-body-md text-xs font-bold text-primary">
+          #{workOrder.orderNumber}
         </span>
-        
-        <span
-          className={`w-fit whitespace-nowrap rounded-full px-2 py-0.5 font-label-caps text-[10px] ${statusBadgeClass(workOrder.status)}`}
-        >
-          {STAGE_LABEL[workOrder.status] || workOrder.status}
+        <span className="truncate font-body-sm text-[11px] font-medium text-on-surface-variant">
+          {vehicle?.brand} {vehicle?.model}
         </span>
       </button>
 
@@ -550,10 +511,6 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
               <span className="flex items-center gap-1 text-emerald-800 font-bold">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 Slot Libre / Disponible
-              </span>
-              <span className="flex items-center gap-1 text-amber-800 font-bold">
-                <span className="material-symbols-outlined text-xs text-amber-600">inventory_2</span>
-                Carga de ayer (Arrastre)
               </span>
             </div>
           </div>
