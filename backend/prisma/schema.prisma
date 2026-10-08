@@ -141,6 +141,7 @@ model WorkOrder {
   customerWaiting Boolean? // Cliente_Espera: SI/NO — el cliente espera en sitio
   washNeeded      Boolean? // Lavado: SI/NO
   advisorCode     String? // Recep — código/iniciales del asesor que recibió la unidad en el DMS
+  agency          String? // Agencia o sucursal (Tuxtla Poniente, Tapachula, etc.)
 
   // Campos del motor de priorización (ver docs/ARCHITECTURE.md). A diferencia de `partsNeeded`
   // (¿requiere refacciones?, lo reporta el DMS), `partsReady` responde ¿ya llegaron todas?, y
@@ -199,6 +200,7 @@ model PendingPart {
   description String? // Descripción de la refacción (opcional)
   orderNumber String // # de pedido (con el proveedor/refaccionaria)
   orderDate   DateTime // Fecha de pedido
+  amount      Float?    @default(0) // Monto de la refacción en MXN
   received    Boolean   @default(false)
   receivedAt  DateTime?
   createdAt   DateTime  @default(now())

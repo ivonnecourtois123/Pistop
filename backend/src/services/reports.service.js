@@ -54,4 +54,124 @@ async function stageDurationsReport(orderType) {
   };
 }
 
-module.exports = { stageDurationsReport };
+// Reporte de refacciones en proceso para órdenes abiertas
+async function pendingPartsReport() {
+  const parts = await prisma.pendingPart.findMany({
+    include: {
+      workOrder: {
+        include: {
+          vehicle: {
+            include: {
+              customer: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const totalParts = parts.length;
+  const pendingCount = parts.filter((p) => !p.received).length;
+  const receivedCount = parts.filter((p) => p.received).length;
+
+  const ordersSet = new Set();
+  const pendingOrdersSet = new Set();
+  let totalPendingAmount = 0;
+  let totalPartsAmount = 0;
+
+  for (const p of parts) {
+    const partAmount = Number(p.amount) || 0;
+    totalPartsAmount += partAmount;
+    ordersSet.add(p.workOrderId);
+    if (!p.received) {
+      pendingOrdersSet.add(p.workOrderId);
+      totalPendingAmount += partAmount;
+    }
+  }
+
+  return {
+    totalParts,
+    pendingCount,
+    receivedCount,
+    totalOrdersWithParts: ordersSet.size,
+    ordersWaitingParts: pendingOrdersSet.size,
+    totalPendingAmount,
+    totalPartsAmount,
+    parts: parts.map((p) => ({
+      id: p.id,
+      partNumber: p.partNumber,
+      description: p.description || 'Sin descripción',
+      orderNumber: p.orderNumber,
+      orderDate: p.orderDate,
+      amount: Number(p.amount) || 0,
+      received: p.received,
+      receivedAt: p.receivedAt,
+      createdAt: p.createdAt,
+      workOrderId: p.workOrderId,
+      workOrderNumber: p.workOrder?.orderNumber || 'S/N',
+      orderType: p.workOrder?.orderType || 'SERVICIO',
+      workOrderStatus: p.workOrder?.status || 'RECIBIDO',
+      agency: p.workOrder?.agency || p.workOrder?.tower || 'Tuxtla Poniente',
+      vehicle: p.workOrder?.vehicle
+        ? {
+            plate: p.workOrder.vehicle.plate,
+            brand: p.workOrder.vehicle.brand,
+            model: p.workOrder.vehicle.model,
+            customerName: p.workOrder.vehicle.customer?.name || 'Cliente general',
+          }
+        : null,
+    })),
+  };
+}
+
+// Reporte ejecutivo central de KPIs del taller
+async function executiveKpisReport() {
+  const [servicioDurations, hypDurations, inProgressOrders, totalDelivered] = await Promise.all([
+    stageDurationsReport('SERVICIO'),
+    stageDurationsReport('HYP'),
+    prisma.workOrder.findMany({
+      where: { status: { not: 'ENTREGADO' } },
+      include: {
+        vehicle: true,
+      },
+    }),
+    prisma.workOrder.count({
+      where: { status: 'ENTREGADO' },
+    }),
+  ]);
+
+  const servicioInProgress = inProgressOrders.filter((o) => o.orderType === 'SERVICIO');
+  const hypInProgress = inProgressOrders.filter((o) => o.orderType === 'HYP');
+
+  // Conteo por categoría de servicio
+  const categoriesCount = {};
+  for (const o of inProgressOrders) {
+    const cat = o.serviceCategory || 'SIN_CLASIFICAR';
+    categoriesCount[cat] = (categoriesCount[cat] || 0) + 1;
+  }
+
+  // Conteo por estatus actual
+  const statusCounts = {};
+  for (const o of inProgressOrders) {
+    statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
+  }
+
+  return {
+    tpeServicioHours: servicioDurations.avgTotalHours,
+    tpeHypHours: hypDurations.avgTotalHours,
+    totalDelivered,
+    totalInProgress: inProgressOrders.length,
+    servicioInProgressCount: servicioInProgress.length,
+    hypInProgressCount: hypInProgress.length,
+    categoriesCount,
+    statusCounts,
+  };
+}
+
+module.exports = {
+  stageDurationsReport,
+  pendingPartsReport,
+  executiveKpisReport,
+};
+

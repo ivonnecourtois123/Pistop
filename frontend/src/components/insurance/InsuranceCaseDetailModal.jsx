@@ -7,7 +7,8 @@ import {
 } from '../../api/insuranceCases.js';
 import { updateImmobilizedTreatmentType } from '../../api/immobilized.js';
 import CommentsButton from '../common/CommentsButton.jsx';
-import { INSURANCE_STAGES, POLICY_TYPES, POLICY_TYPE_LABELS, DOCUMENT_TYPES } from '../../constants/immobilized.js';
+import ExpedienteChecklist from './ExpedienteChecklist.jsx';
+import { INSURANCE_STAGES, POLICY_TYPES, POLICY_TYPE_LABELS } from '../../constants/immobilized.js';
 
 export default function InsuranceCaseDetailModal({ insuranceCase, onClose, onUpdated, onRemoved }) {
   const { immobilizedUnit } = insuranceCase;
@@ -17,6 +18,9 @@ export default function InsuranceCaseDetailModal({ insuranceCase, onClose, onUpd
   const [reportNumber, setReportNumber] = useState(insuranceCase.reportNumber || '');
   const [insurer, setInsurer] = useState(insuranceCase.insurer || '');
   const [policyType, setPolicyType] = useState(insuranceCase.policyType || '');
+  const [responsible, setResponsible] = useState(
+    insuranceCase.responsible || localStorage.getItem(`pitstop.insuranceResp.${insuranceCase.id}`) || 'Lupita López'
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showRemove, setShowRemove] = useState(false);
@@ -122,8 +126,6 @@ export default function InsuranceCaseDetailModal({ insuranceCase, onClose, onUpd
                 const current = index === currentIndex;
                 const clickable = index > currentIndex;
                 const stageComments = insuranceCase.stageComments.filter((c) => c.stage === stage.key);
-                // La ventana flotante de comentarios es más ancha que una columna: en los
-                // extremos se ancla al borde en vez de centrarse, para no salirse del modal.
                 const align = index === 0 ? 'left' : index === INSURANCE_STAGES.length - 1 ? 'right' : 'center';
 
                 return (
@@ -133,14 +135,16 @@ export default function InsuranceCaseDetailModal({ insuranceCase, onClose, onUpd
                       disabled={!clickable || saving}
                       onClick={() => handleAdvanceStage(stage.key)}
                       title={clickable ? `Avanzar a ${stage.label}` : undefined}
-                      className={`w-full rounded-lg border px-2 py-3 text-center font-label-caps text-[10px] disabled:cursor-default ${
-                        reached
+                      className={`w-full rounded-lg border px-2 py-3 text-center font-label-caps text-[10px] transition-all disabled:cursor-default ${
+                        current
+                          ? 'border-2 border-emerald-500 bg-emerald-50 text-emerald-900 font-bold shadow-sm ring-1 ring-emerald-300'
+                          : reached
                           ? 'border-primary/30 bg-primary/5 text-primary'
                           : 'border-outline-variant bg-surface-container-low text-on-surface-variant'
                       } ${clickable ? 'hover:border-primary' : ''}`}
                     >
                       {stage.label}
-                      {current && <div className="mt-1 text-secondary">(actual)</div>}
+                      {current && <div className="mt-1 font-bold text-emerald-600 uppercase">(actual)</div>}
                     </button>
                     <div className="mt-1.5 flex justify-center">
                       <CommentsButton
@@ -155,7 +159,7 @@ export default function InsuranceCaseDetailModal({ insuranceCase, onClose, onUpd
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
             <label className="block">
               <span className="mb-1 block font-label-caps text-label-caps text-on-surface-variant">
                 # REPORTE
@@ -163,6 +167,7 @@ export default function InsuranceCaseDetailModal({ insuranceCase, onClose, onUpd
               <input
                 value={reportNumber}
                 onChange={(e) => setReportNumber(e.target.value)}
+                placeholder="Ej. SIN-QUA-98124"
                 className="block w-full rounded-lg border border-outline-variant bg-white px-3 py-2 font-body-md text-primary"
               />
             </label>
@@ -173,6 +178,7 @@ export default function InsuranceCaseDetailModal({ insuranceCase, onClose, onUpd
               <input
                 value={insurer}
                 onChange={(e) => setInsurer(e.target.value)}
+                placeholder="Ej. Qualitas, GNP, Zurich..."
                 className="block w-full rounded-lg border border-outline-variant bg-white px-3 py-2 font-body-md text-primary"
               />
             </label>
@@ -193,6 +199,24 @@ export default function InsuranceCaseDetailModal({ insuranceCase, onClose, onUpd
                 ))}
               </select>
             </label>
+            <label className="block">
+              <span className="mb-1 block font-label-caps text-label-caps text-on-surface-variant">
+                RESPONSABLE SEGUROS
+              </span>
+              <input
+                value={responsible}
+                onChange={(e) => {
+                  setResponsible(e.target.value);
+                  try {
+                    localStorage.setItem(`pitstop.insuranceResp.${insuranceCase.id}`, e.target.value);
+                  } catch {
+                    // safe
+                  }
+                }}
+                placeholder="Ej. Lupita López"
+                className="block w-full rounded-lg border border-outline-variant bg-white px-3 py-2 font-body-md text-primary"
+              />
+            </label>
           </div>
           <div className="flex justify-end">
             <button
@@ -205,29 +229,13 @@ export default function InsuranceCaseDetailModal({ insuranceCase, onClose, onUpd
             </button>
           </div>
 
-          <div>
-            <span className="mb-2 block font-label-caps text-label-caps text-on-surface-variant">
-              CHECKLIST DEL EXPEDIENTE DIGITAL ({completedDocs}/{DOCUMENT_TYPES.length})
-            </span>
-            <ul className="space-y-2 rounded-lg border border-outline-variant p-3">
-              {DOCUMENT_TYPES.map((doc) => {
-                const record = insuranceCase.documents.find((d) => d.docType === doc.key);
-                return (
-                  <li key={doc.key} className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={record?.completed || false}
-                      onChange={(e) => handleToggleDoc(doc.key, e.target.checked)}
-                      disabled={saving}
-                      className="h-4 w-4"
-                    />
-                    <span className={`font-body-md text-sm ${record?.completed ? 'text-primary' : 'text-on-surface-variant'}`}>
-                      {doc.label}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+          <div className="rounded-lg border border-outline-variant bg-white p-4">
+            <ExpedienteChecklist
+              insurerName={insurer}
+              documents={insuranceCase.documents}
+              onToggleDoc={handleToggleDoc}
+              entityId={insuranceCase.id}
+            />
           </div>
 
           {!showRemove ? (

@@ -54,13 +54,13 @@ export default function CapacityPanel({ team, refreshKey }) {
         ) : (
           <div className="flex gap-6 text-sm text-on-surface-variant">
             <span>
-              <span className="font-medium text-primary">{data.technicianCount}</span> técnicos
+              <span className="font-medium text-primary">{data.technicianCount ?? 0}</span> técnicos
             </span>
             <span>
-              <span className="font-medium text-primary">{data.capacityHours.toFixed(1)}</span> h/día disponibles
+              <span className="font-medium text-primary">{data.capacityHours != null ? data.capacityHours.toFixed(1) : '0.0'}</span> h/día disponibles
             </span>
             <span>
-              <span className="font-medium text-primary">{data.demandHours.toFixed(1)}</span> h demandadas
+              <span className="font-medium text-primary">{data.demandHours != null ? data.demandHours.toFixed(1) : '0.0'}</span> h demandadas
             </span>
           </div>
         )}

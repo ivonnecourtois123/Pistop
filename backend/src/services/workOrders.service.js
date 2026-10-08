@@ -221,6 +221,7 @@ async function addPendingPart(workOrderId, data) {
       description: data.description,
       orderNumber: data.orderNumber,
       orderDate: data.orderDate,
+      amount: data.amount ?? 0,
     },
   });
   await recomputePartsReady(workOrderId);

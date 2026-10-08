@@ -8,10 +8,12 @@ import SegurosPage from './pages/SegurosPage.jsx';
 import ReportsPage from './pages/ReportsPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
 import ProtectedRoute from './components/common/ProtectedRoute.jsx';
+import ErrorBoundary from './components/common/ErrorBoundary.jsx';
 
 export default function App() {
   return (
-    <Routes>
+    <ErrorBoundary>
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route
         path="/"
@@ -63,5 +65,6 @@ export default function App() {
       />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
+    </ErrorBoundary>
   );
 }

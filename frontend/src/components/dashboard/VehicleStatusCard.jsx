@@ -89,9 +89,10 @@ export default function VehicleStatusCard({ workOrder, onUpdated }) {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <div className="rounded-full border border-secondary-container/20 bg-secondary-container/10 px-4 py-2">
-            <span className="font-label-caps text-label-caps text-secondary">
-              Estado: {STATUS_LABEL[status]}
+          <div className="flex items-center gap-2 rounded-full border-2 border-emerald-500 bg-emerald-50 px-4 py-2 shadow-xs">
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="font-label-caps text-label-caps font-bold text-emerald-800">
+              ESTADO ACTUAL: {STATUS_LABEL[status] || status}
             </span>
           </div>
           {upcoming && (

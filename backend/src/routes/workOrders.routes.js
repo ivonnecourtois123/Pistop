@@ -16,6 +16,8 @@ router.get('/capacity/:team/settings', controller.getCapacitySettings);
 router.patch('/capacity/:team/settings', controller.updateCapacitySettings);
 router.get('/capacity/:team', controller.getCapacity);
 router.get('/reports/stage-durations', controller.getStageDurationsReport);
+router.get('/reports/pending-parts', controller.getPendingPartsReport);
+router.get('/reports/executive-kpis', controller.getExecutiveKpisReport);
 router.get('/:id', controller.getOne);
 router.post('/', controller.create);
 router.patch('/:id/status', controller.updateStatus);

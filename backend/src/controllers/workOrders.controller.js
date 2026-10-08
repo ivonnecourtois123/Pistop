@@ -41,6 +41,7 @@ const pendingPartSchema = z.object({
   description: z.string().optional(),
   orderNumber: z.string().min(1),
   orderDate: z.coerce.date(),
+  amount: z.coerce.number().optional().default(0),
 });
 
 const pendingPartReceivedSchema = z.object({
@@ -281,6 +282,16 @@ async function getStageDurationsReport(req, res) {
   res.json(data);
 }
 
+async function getPendingPartsReport(req, res) {
+  const data = await reportsService.pendingPartsReport();
+  res.json(data);
+}
+
+async function getExecutiveKpisReport(req, res) {
+  const data = await reportsService.executiveKpisReport();
+  res.json(data);
+}
+
 module.exports = {
   list,
   getOne,
@@ -310,4 +321,7 @@ module.exports = {
   listServiceCategoryHours,
   updateServiceCategoryHours,
   getStageDurationsReport,
+  getPendingPartsReport,
+  getExecutiveKpisReport,
 };
+

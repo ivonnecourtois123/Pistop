@@ -127,3 +127,14 @@ export async function getStageDurationsReport(orderType) {
   const { data } = await apiClient.get('/work-orders/reports/stage-durations', { params: { orderType } });
   return data;
 }
+
+export async function getPendingPartsReport() {
+  const { data } = await apiClient.get('/work-orders/reports/pending-parts');
+  return data;
+}
+
+export async function getExecutiveKpisReport() {
+  const { data } = await apiClient.get('/work-orders/reports/executive-kpis');
+  return data;
+}
+
