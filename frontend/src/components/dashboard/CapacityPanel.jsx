@@ -68,14 +68,18 @@ export default function CapacityPanel({ team, refreshKey }) {
           </span>
           <div>
             <p className="font-label-caps text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
-              CAPACIDAD Y MANO DE OBRA (MO)
+              OCUPACIÓN DE MANO DE OBRA (MO)
             </p>
             <div className="flex items-baseline gap-2">
               <p className={`font-headline-md text-2xl font-black ${colorClass}`}>
                 {formatPercent(data.utilization)}
               </p>
               <span className={`text-xs font-bold ${colorClass}`}>
-                {data.utilization > 1 ? '⚠️ Taller Saturado' : data.utilization >= 0.85 ? '⚡ Alta Ocupación' : '🟢 Capacidad Disponible'}
+                {data.utilization > 1
+                  ? `⚠️ Taller Saturado (+${(demandHours - capacityHours).toFixed(1)} h exceso)`
+                  : data.utilization >= 0.85
+                  ? `⚡ Alta Ocupación • ${availableHours.toFixed(1)} h libres (${Math.round(freePct)}%)`
+                  : `🟢 Capacidad Disponible • ${availableHours.toFixed(1)} h libres (${Math.round(freePct)}%)`}
               </span>
             </div>
           </div>
@@ -120,7 +124,9 @@ export default function CapacityPanel({ team, refreshKey }) {
                 <span className="material-symbols-outlined text-xs text-emerald-700">check_circle</span>
                 Cupo Disponible
               </span>
-              <span className="font-headline-md text-sm font-black text-emerald-700">{availableUnits} unidades libres</span>
+              <span className="font-headline-md text-sm font-black text-emerald-700">
+                {availableUnits} unidades ({Math.round(hypFreePct)}% libre)
+              </span>
             </div>
           </div>
         ) : (
@@ -169,7 +175,9 @@ export default function CapacityPanel({ team, refreshKey }) {
                 <span className="material-symbols-outlined text-xs text-emerald-700">schedule</span>
                 Tiempo Disponible
               </span>
-              <span className="font-headline-md text-sm font-black text-emerald-700">{availableHours.toFixed(1)} h libres</span>
+              <span className="font-headline-md text-sm font-black text-emerald-700">
+                {availableHours.toFixed(1)} h libres ({Math.round(freePct)}%)
+              </span>
             </div>
           </div>
         )}
