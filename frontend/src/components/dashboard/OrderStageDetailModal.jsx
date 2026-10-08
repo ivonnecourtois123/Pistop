@@ -158,7 +158,6 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
   const { vehicle, statusEvents = [], stageComments = [] } = workOrder;
   const progress =
     standardHours && workOrder.orderType === 'SERVICIO' ? computeWorkProgress(workOrder, standardHours) : null;
-  const eventsByTime = [...statusEvents].sort((a, b) => new Date(a.occurredAt) - new Date(b.occurredAt));
   const STAGES = getStages(workOrder.orderType);
   const currentIndex = STAGES.findIndex((s) => s.key === workOrder.status);
   const nextStage = STAGES[currentIndex + 1] || null;
@@ -475,8 +474,8 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
                   </div>
                 </div>
 
-                {/* BITÁCORA INTEGRADA DE SEGUIMIENTOS Y HISTORIAL DE CAMBIOS */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 border-t border-outline-variant/60 pt-5">
+                {/* BITÁCORA INTEGRADA DE SEGUIMIENTOS */}
+                <div className="w-full border-t border-outline-variant/60 pt-5">
                   {/* Bitácora de comentarios en vivo */}
                   <div className="rounded-xl border border-outline-variant bg-white p-4 flex flex-col justify-between shadow-xs">
                     <div>
@@ -490,7 +489,7 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
                         </span>
                       </div>
 
-                      <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                      <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
                         {stageComments.length > 0 ? (
                           stageComments.map((c) => (
                             <div key={c.id} className="rounded-lg border border-outline-variant/60 bg-slate-50 p-2.5 text-xs">
@@ -575,50 +574,6 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
                         </button>
                       </div>
                     </form>
-                  </div>
-
-                  {/* Historial de Auditoría de Cambios de Estatus */}
-                  <div className="rounded-xl border border-outline-variant bg-white p-4 flex flex-col justify-between shadow-xs">
-                    <div>
-                      <div className="flex items-center justify-between border-b border-outline-variant pb-2 mb-3">
-                        <span className="font-label-caps text-xs font-bold text-primary uppercase flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-sm text-primary">fact_check</span>
-                          Historial de Auditoría de Etapas ({statusEvents.length})
-                        </span>
-                        <span className="text-[10px] text-on-surface-variant">Tiempos y transiciones</span>
-                      </div>
-
-                      <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                        {eventsByTime.length > 0 ? (
-                          eventsByTime.map((ev, idx) => (
-                            <div key={ev.id || idx} className="rounded-lg border border-outline-variant/60 bg-slate-50/70 p-2.5 text-xs">
-                              <div className="flex items-center justify-between text-[10px] mb-1">
-                                <span className="font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded font-label-caps text-[10px]">
-                                  {STAGE_LABEL[ev.status] || ev.status}
-                                </span>
-                                <span className="font-data-mono text-on-surface-variant">
-                                  {formatDateTime(ev.occurredAt)}
-                                </span>
-                              </div>
-                              {ev.note && (
-                                <p className="mt-1 text-on-surface text-xs italic bg-white p-1.5 rounded border border-outline-variant/40">
-                                  &quot;{ev.note}&quot;
-                                </p>
-                              )}
-                            </div>
-                          ))
-                        ) : (
-                          <div className="py-6 text-center text-xs text-on-surface-variant/70 italic bg-slate-50 rounded-lg border border-dashed border-outline-variant">
-                            Sin registros de auditoría aún.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-3 pt-2 border-t border-outline-variant/60 text-[11px] text-on-surface-variant flex items-center justify-between">
-                      <span>Total transiciones: <strong>{statusEvents.length}</strong></span>
-                      <span>Ingreso: <strong>{formatDateTime(workOrder.receivedAt) || '—'}</strong></span>
-                    </div>
                   </div>
                 </div>
               </>
