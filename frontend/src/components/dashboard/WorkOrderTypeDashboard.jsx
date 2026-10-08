@@ -25,7 +25,8 @@ function matchesSearch(workOrder, term, { includeReportNumber } = {}) {
 }
 
 export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, showDeliveryAgenda, showMiddayCutoff }) {
-  const [activeMainTab, setActiveMainTab] = useState('taller'); // 'taller' | 'cotizador'
+  // Pestañas principales: 'tablero' | 'seguimiento' | 'cotizador'
+  const [activeMainTab, setActiveMainTab] = useState('tablero');
   const [searchTerm, setSearchTerm] = useState('');
   const [brandFilter, setBrandFilter] = useState('ALL');
   const [agencyFilter, setAgencyFilter] = useState('ALL');
@@ -37,6 +38,7 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
   const [capacityRefreshKey, setCapacityRefreshKey] = useState(0);
   const [middayCutoffActive, setMiddayCutoffActive] = useState(false);
   const [standardHours, setStandardHours] = useState(null);
+  const [agingFilter, setAgingFilter] = useState(null); // null | 'with_parts' | 'over15' | 'over30' | 'over60'
 
   const loadStats = useCallback(async () => {
     const data = await getTodayStats(orderType);
@@ -107,8 +109,6 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
     });
     return Array.from(set).sort();
   }, [inProgressList]);
-
-  const [agingFilter, setAgingFilter] = useState(null); // null | 'with_parts' | 'over15' | 'over30' | 'over60'
 
   function daysSince(dateString) {
     if (!dateString) return 0;
@@ -252,7 +252,7 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
               </div>
             </div>
 
-            {/* Buscador de órdenes discreto y elegante ubicado al lado del título */}
+            {/* Buscador de órdenes discreto y elegante */}
             <div className="relative w-full sm:w-72 md:w-80 shrink-0">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-base text-on-surface-variant/70">
                 search
@@ -281,53 +281,62 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
             </div>
           </div>
 
-          {/* BARRA DE PESTAÑAS Y FILTROS COMPACTOS EN LA MISMA LÍNEA */}
+          {/* BARRA DE PESTAÑAS (3 PESTAÑAS: TABLERO / SEGUIMIENTO / COTIZADOR) */}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-outline-variant w-full pt-1">
             {/* Pestañas a la izquierda */}
             <div className="flex items-center -mb-px overflow-x-auto">
-              {orderType === 'SERVICIO' ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setActiveMainTab('taller')}
-                    className={`flex items-center gap-2 border-b-2 px-4 py-2.5 font-label-caps text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
-                      activeMainTab === 'taller'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-on-surface-variant hover:text-primary'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-base">directions_car</span>
-                    Taller en Proceso
-                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-extrabold text-primary">
-                      {inProgressList.length}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveMainTab('cotizador')}
-                    className={`flex items-center gap-2 border-b-2 px-4 py-2.5 font-label-caps text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
-                      activeMainTab === 'cotizador'
-                        ? 'border-primary text-primary'
-                        : 'border-transparent text-on-surface-variant hover:text-primary'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-base">calculate</span>
-                    Cotizador de Mantenimientos
-                  </button>
-                </>
-              ) : (
-                <div className="flex items-center gap-2 border-b-2 border-primary px-4 py-2.5 font-label-caps text-xs font-bold text-primary">
-                  <span className="material-symbols-outlined text-base">car_repair</span>
-                  Taller en Proceso
-                  <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-extrabold text-primary">
-                    {inProgressList.length}
-                  </span>
-                </div>
+              {/* 1. Tablero / Magnetoplano */}
+              <button
+                type="button"
+                onClick={() => setActiveMainTab('tablero')}
+                className={`flex items-center gap-2 border-b-2 px-4 py-2.5 font-label-caps text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                  activeMainTab === 'tablero'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-on-surface-variant hover:text-primary'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">dashboard</span>
+                {orderType === 'HYP' ? 'Tablero y Agenda de Entregas' : 'Tablero / Magnetoplano'}
+              </button>
+
+              {/* 2. Seguimiento de Unidades (Unidades en Proceso y Rezagadas) */}
+              <button
+                type="button"
+                onClick={() => setActiveMainTab('seguimiento')}
+                className={`flex items-center gap-2 border-b-2 px-4 py-2.5 font-label-caps text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                  activeMainTab === 'seguimiento'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-on-surface-variant hover:text-primary'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">
+                  {orderType === 'HYP' ? 'car_repair' : 'directions_car'}
+                </span>
+                Seguimiento de Unidades
+                <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-extrabold text-primary">
+                  {inProgressList.length}
+                </span>
+              </button>
+
+              {/* 3. Cotizador de Mantenimientos (Solo SERVICIO) */}
+              {orderType === 'SERVICIO' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveMainTab('cotizador')}
+                  className={`flex items-center gap-2 border-b-2 px-4 py-2.5 font-label-caps text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                    activeMainTab === 'cotizador'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-on-surface-variant hover:text-primary'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-base">calculate</span>
+                  Cotizador de Mantenimientos
+                </button>
               )}
             </div>
 
             {/* Filtros compactos y discretos a la derecha (Marca + Agencia + Limpiar) */}
-            {activeMainTab === 'taller' && (
+            {activeMainTab === 'seguimiento' && (
               <div className="flex flex-wrap items-center gap-2 pb-2 lg:pb-1">
                 {/* Pills de Marca */}
                 <div className="flex items-center gap-1 bg-surface-container/40 p-0.5 rounded-lg border border-outline-variant/60">
@@ -417,18 +426,31 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
         </div>
 
         {/* CONTENIDO SEGÚN LA PESTAÑA ACTIVA */}
-        {activeMainTab === 'cotizador' && orderType === 'SERVICIO' ? (
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <Spinner />
+          </div>
+        ) : error ? (
+          <div className="rounded-xl border border-error bg-error-container/30 px-4 py-3 text-sm text-on-error-container w-full">
+            {error}
+          </div>
+        ) : activeMainTab === 'cotizador' && orderType === 'SERVICIO' ? (
+          /* PESTAÑA 3: COTIZADOR DE MANTENIMIENTOS */
           <MaintenanceQuoter />
-        ) : (
-          <>
-            {/* 1. Tarjetas Superiores: Refacciones y Clasificaciones de Antigüedad para Rezagadas */}
+        ) : activeMainTab === 'tablero' ? (
+          /* PESTAÑA 1: TABLERO / MAGNETOPLANO Y CAPACIDAD */
+          <div className="w-full space-y-6">
+            {/* 1. Tarjetas Superiores: Refacciones y Clasificaciones de Antigüedad */}
             <StatsTiles
               stats={computedStats}
               activeAgingFilter={agingFilter}
-              onSelectAgingFilter={setAgingFilter}
+              onSelectAgingFilter={(f) => {
+                setAgingFilter(f);
+                if (f) setActiveMainTab('seguimiento');
+              }}
             />
 
-            {/* 2. Tableros superiores: Horas Promesa de Entrega con Indicadores Operativos al lado del calendario */}
+            {/* 2. Magnetoplano de Horas Promesa / Agenda HYP */}
             {showPromiseBoard && (
               <PromiseTimeBoard
                 workOrders={filteredList}
@@ -441,74 +463,65 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
               <HypDeliveryAgenda workOrders={filteredList} onSelect={setDetailOrder} />
             )}
 
-            <div className="grid w-full grid-cols-1 gap-gutter">
-              {error && (
-                <div className="rounded-xl border border-error bg-error-container/30 px-4 py-3 text-sm text-on-error-container">
-                  {error}
-                </div>
-              )}
+            {/* 3. Panel de Capacidad y Mano de Obra (MO) */}
+            <CapacityPanel team={orderType} refreshKey={capacityRefreshKey} />
+          </div>
+        ) : (
+          /* PESTAÑA 2: SEGUIMIENTO DE UNIDADES EN PROCESO Y REZAGADAS */
+          <div className="w-full space-y-4">
+            {/* Barra de Filtro de Corte de Mediodía */}
+            {showMiddayCutoff && (
+              <MiddayCutoffFilter
+                active={middayCutoffActive}
+                onToggle={() => setMiddayCutoffActive((v) => !v)}
+                count={middayList.length}
+                atRiskCount={middayAtRiskCount}
+              />
+            )}
 
-              {loading ? (
-                <div className="flex justify-center py-16">
-                  <Spinner />
-                </div>
-              ) : (
-                <>
-                  <CapacityPanel team={orderType} refreshKey={capacityRefreshKey} />
-
-                  {showMiddayCutoff && (
-                    <MiddayCutoffFilter
-                      active={middayCutoffActive}
-                      onToggle={() => setMiddayCutoffActive((v) => !v)}
-                      count={middayList.length}
-                      atRiskCount={middayAtRiskCount}
-                    />
-                  )}
-
-                  {middayList.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-outline-variant bg-white p-12 text-center shadow-xs">
-                      <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 mb-2">
-                        search_off
-                      </span>
-                      <p className="font-headline-md text-base font-bold text-primary">
-                        No se encontraron órdenes con los filtros seleccionados.
-                      </p>
-                      <p className="mt-1 font-body-md text-xs text-on-surface-variant">
-                        {brandFilter !== 'ALL' ? `Marca: ${brandFilter} • ` : ''}
-                        {agencyFilter !== 'ALL' ? `Agencia: ${agencyFilter} • ` : ''}
-                        {agingFilter ? `Filtro antigüedad: ${agingFilter} • ` : ''}
-                        {searchTerm ? `Búsqueda: "${searchTerm}"` : ''}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setBrandFilter('ALL');
-                          setAgencyFilter('ALL');
-                          setSearchTerm('');
-                          setAgingFilter(null);
-                        }}
-                        className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 font-label-caps text-xs font-bold text-white hover:bg-primary/90 transition-colors cursor-pointer"
-                      >
-                        Mostrar todas las órdenes
-                      </button>
-                    </div>
-                  ) : (
-                    <InProgressList
-                      workOrders={middayList}
-                      onStatusChanged={handleOrderUpdated}
-                      onSelect={setDetailOrder}
-                      orderType={orderType}
-                      atRiskStages={middayCutoffActive ? SAFE_STAGES : null}
-                      standardHours={standardHours}
-                    />
-                  )}
-                </>
-              )}
-            </div>
-          </>
+            {/* Listado o Estado Vacío */}
+            {middayList.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-outline-variant bg-white p-12 text-center shadow-xs">
+                <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 mb-2">
+                  search_off
+                </span>
+                <p className="font-headline-md text-base font-bold text-primary">
+                  No se encontraron órdenes con los filtros seleccionados.
+                </p>
+                <p className="mt-1 font-body-md text-xs text-on-surface-variant">
+                  {brandFilter !== 'ALL' ? `Marca: ${brandFilter} • ` : ''}
+                  {agencyFilter !== 'ALL' ? `Agencia: ${agencyFilter} • ` : ''}
+                  {agingFilter ? `Filtro antigüedad: ${agingFilter} • ` : ''}
+                  {searchTerm ? `Búsqueda: "${searchTerm}"` : ''}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBrandFilter('ALL');
+                    setAgencyFilter('ALL');
+                    setSearchTerm('');
+                    setAgingFilter(null);
+                  }}
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 font-label-caps text-xs font-bold text-white hover:bg-primary/90 transition-colors cursor-pointer"
+                >
+                  Mostrar todas las órdenes
+                </button>
+              </div>
+            ) : (
+              <InProgressList
+                workOrders={middayList}
+                onStatusChanged={handleOrderUpdated}
+                onSelect={setDetailOrder}
+                orderType={orderType}
+                atRiskStages={middayCutoffActive ? SAFE_STAGES : null}
+                standardHours={standardHours}
+              />
+            )}
+          </div>
         )}
       </main>
 
+      {/* Modal de Detalle de Etapas y Seguimiento */}
       {detailOrder && (
         <OrderStageDetailModal
           workOrder={detailOrder}
