@@ -85,20 +85,13 @@ const NO_TIME_COLUMN = { key: 'none', label: 'Sin hora definida' };
 const WORKSHOP_DEFAULT_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
 
 // Matriz técnico × hora de entrega para el día seleccionado: filas = técnicos (con "Sin
-// asignar" al final), columnas = horas con unidades (+ "Sin hora definida").
-function buildMatrix(workOrders, selectedDate, fullDayMode = true) {
+// asignar" al final), columnas = horas completas de jornada (08:00 a 18:00 + citas) (+ "Sin hora definida").
+function buildMatrix(workOrders, selectedDate) {
   const { withHour, noTime } = unitsForSelectedDate(workOrders, selectedDate);
 
   const orderHours = withHour.map((wo) => new Date(wo.estimatedDeliveryAt).getHours());
-  
-  let hoursList;
-  if (fullDayMode) {
-    const combined = new Set([...WORKSHOP_DEFAULT_HOURS, ...orderHours]);
-    hoursList = [...combined].sort((a, b) => a - b);
-  } else {
-    const combined = new Set(orderHours);
-    hoursList = [...combined].sort((a, b) => a - b);
-  }
+  const combined = new Set([...WORKSHOP_DEFAULT_HOURS, ...orderHours]);
+  const hoursList = [...combined].sort((a, b) => a - b);
 
   const columns = hoursList.map((h) => ({ key: `hour-${h}`, hour: h, label: formatHour(h) }));
   if (noTime.length) columns.push(NO_TIME_COLUMN);
@@ -302,7 +295,6 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
   const [collapsed, setCollapsed] = useState(false);
   const [selectedDate, setSelectedDate] = useState(startOfToday);
   const [openCardId, setOpenCardId] = useState(null);
-  const [fullDayMode, setFullDayMode] = useState(true);
 
   useEffect(() => {
     if (!openCardId) return undefined;
@@ -316,8 +308,8 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
   }, [openCardId]);
 
   const { rows, columns, cells } = useMemo(
-    () => buildMatrix(workOrders, selectedDate, fullDayMode),
-    [workOrders, selectedDate, fullDayMode]
+    () => buildMatrix(workOrders, selectedDate),
+    [workOrders, selectedDate]
   );
 
   const otherDays = useMemo(() => upcomingDaysWithOrders(workOrders, selectedDate), [workOrders, selectedDate]);
@@ -464,28 +456,9 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
               </div>
             </div>
 
-            {/* Toggle Jornada Completa / Solo con Citas */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setFullDayMode((v) => !v)}
-                className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-bold transition-colors cursor-pointer ${
-                  fullDayMode
-                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800 shadow-2xs'
-                    : 'border-outline-variant bg-white text-on-surface-variant hover:text-primary'
-                }`}
-                title="Muestra todas las franjas horarias de 08:00 a 18:00 para identificar huecos y slots libres"
-              >
-                <span className="material-symbols-outlined text-sm">
-                  {fullDayMode ? 'grid_view' : 'filter_list'}
-                </span>
-                <span>{fullDayMode ? 'Jornada Completa (Slots)' : 'Solo con Citas'}</span>
-              </button>
-
-              <span className="font-label-caps text-[11px] text-on-surface-variant font-bold">
-                {totalCount} unidad(es)
-              </span>
-            </div>
+            <span className="font-label-caps text-[11px] text-on-surface-variant font-bold">
+              {totalCount} unidad(es)
+            </span>
           </div>
 
           {/* Leyenda y referencia rápida */}
