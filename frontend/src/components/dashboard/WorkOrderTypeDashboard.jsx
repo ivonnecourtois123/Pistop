@@ -7,7 +7,6 @@ import PromiseTimeBoard from './PromiseTimeBoard.jsx';
 import HypDeliveryAgenda from './HypDeliveryAgenda.jsx';
 import OrderStageDetailModal from './OrderStageDetailModal.jsx';
 import Spinner from '../common/Spinner.jsx';
-import MiddayCutoffFilter, { filterMiddayCutoff, SAFE_STAGES } from './MiddayCutoffFilter.jsx';
 import MaintenanceQuoter from '../quoter/MaintenanceQuoter.jsx';
 import { getTodayStats, getInProgressWorkOrders, getWorkOrder } from '../../api/workOrders.js';
 import { getServiceCategoryHours } from '../../api/capacity.js';
@@ -24,7 +23,7 @@ function matchesSearch(workOrder, term, { includeReportNumber } = {}) {
   );
 }
 
-export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, showDeliveryAgenda, showMiddayCutoff }) {
+export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, showDeliveryAgenda }) {
   // Pestañas principales: 'tablero' | 'seguimiento' | 'cotizador'
   const [activeMainTab, setActiveMainTab] = useState('tablero');
   const [searchTerm, setSearchTerm] = useState('');
@@ -36,7 +35,6 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
   const [error, setError] = useState('');
   const [detailOrder, setDetailOrder] = useState(null);
   const [capacityRefreshKey, setCapacityRefreshKey] = useState(0);
-  const [middayCutoffActive, setMiddayCutoffActive] = useState(false);
   const [standardHours, setStandardHours] = useState(null);
   const [agingFilter, setAgingFilter] = useState(null); // null | 'with_parts' | 'over15' | 'over30' | 'over60'
 
@@ -214,15 +212,6 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
     };
   }, [stats, inProgressList, brandFilter, agencyFilter, searchTerm, orderType]);
 
-  const middayList = useMemo(
-    () => (middayCutoffActive ? filterMiddayCutoff(filteredList) : filteredList),
-    [filteredList, middayCutoffActive]
-  );
-  const middayAtRiskCount = useMemo(
-    () => (middayCutoffActive ? middayList.filter((wo) => !SAFE_STAGES.includes(wo.status)).length : 0),
-    [middayList, middayCutoffActive]
-  );
-
   const hasActiveFilters = brandFilter !== 'ALL' || agencyFilter !== 'ALL' || searchTerm.trim().length > 0 || agingFilter !== null;
 
   return (
@@ -281,7 +270,7 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
             </div>
           </div>
 
-          {/* BARRA DE PESTAÑAS (3 PESTAÑAS: TABLERO / SEGUIMIENTO / COTIZADOR) */}
+          {/* BARRA DE PESTAÑAS (TABLERO / SEGUIMIENTO / COTIZADOR) Y FILTROS */}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-outline-variant w-full pt-1">
             {/* Pestañas a la izquierda */}
             <div className="flex items-center -mb-px overflow-x-auto">
@@ -335,8 +324,8 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
               )}
             </div>
 
-            {/* Filtros compactos y discretos a la derecha (Marca + Agencia + Limpiar) */}
-            {activeMainTab === 'seguimiento' && (
+            {/* Filtros compactos y discretos (Marca + Agencia + Limpiar) disponibles en Tablero y Seguimiento */}
+            {activeMainTab !== 'cotizador' && (
               <div className="flex flex-wrap items-center gap-2 pb-2 lg:pb-1">
                 {/* Pills de Marca */}
                 <div className="flex items-center gap-1 bg-surface-container/40 p-0.5 rounded-lg border border-outline-variant/60">
@@ -469,18 +458,7 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
         ) : (
           /* PESTAÑA 2: SEGUIMIENTO DE UNIDADES EN PROCESO Y REZAGADAS */
           <div className="w-full space-y-4">
-            {/* Barra de Filtro de Corte de Mediodía */}
-            {showMiddayCutoff && (
-              <MiddayCutoffFilter
-                active={middayCutoffActive}
-                onToggle={() => setMiddayCutoffActive((v) => !v)}
-                count={middayList.length}
-                atRiskCount={middayAtRiskCount}
-              />
-            )}
-
-            {/* Listado o Estado Vacío */}
-            {middayList.length === 0 ? (
+            {filteredList.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-outline-variant bg-white p-12 text-center shadow-xs">
                 <span className="material-symbols-outlined text-4xl text-on-surface-variant/40 mb-2">
                   search_off
@@ -509,11 +487,10 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
               </div>
             ) : (
               <InProgressList
-                workOrders={middayList}
+                workOrders={filteredList}
                 onStatusChanged={handleOrderUpdated}
                 onSelect={setDetailOrder}
                 orderType={orderType}
-                atRiskStages={middayCutoffActive ? SAFE_STAGES : null}
                 standardHours={standardHours}
               />
             )}
