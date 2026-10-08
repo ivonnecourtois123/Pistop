@@ -158,6 +158,7 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
   const { vehicle, statusEvents = [], stageComments = [] } = workOrder;
   const progress =
     standardHours && workOrder.orderType === 'SERVICIO' ? computeWorkProgress(workOrder, standardHours) : null;
+  const eventsByTime = [...statusEvents].sort((a, b) => new Date(a.occurredAt) - new Date(b.occurredAt));
   const STAGES = getStages(workOrder.orderType);
   const currentIndex = STAGES.findIndex((s) => s.key === workOrder.status);
   const nextStage = STAGES[currentIndex + 1] || null;
