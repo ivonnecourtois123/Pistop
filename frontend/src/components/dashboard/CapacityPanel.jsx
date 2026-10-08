@@ -183,63 +183,90 @@ export default function CapacityPanel({ team, refreshKey }) {
         )}
       </div>
 
-      {/* BARRA VISUAL DE DISTRIBUCIÓN DE CAPACIDAD */}
+      {/* BARRA VISUAL DE DISTRIBUCIÓN DE CAPACIDAD CON GUÍAS SOBRE LAS BARRAS */}
       <div className="mt-3.5 space-y-1.5">
         <div className="flex items-center justify-between text-[11px] font-semibold text-on-surface-variant">
-          <span className="font-label-caps uppercase tracking-wider text-[10px]">Distribución de la jornada</span>
-          <div className="flex items-center gap-3 text-[10px]">
-            <span className="flex items-center gap-1 text-amber-800">
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
-              Arrastre: {isHyp ? `${carryoverUnits} un.` : `${carryoverHours.toFixed(1)} h`}
-            </span>
-            <span className="flex items-center gap-1 text-blue-800">
-              <span className="h-2 w-2 rounded-full bg-blue-500" />
-              Hoy: {isHyp ? `${todayUnits} un.` : `${todayDemandHours.toFixed(1)} h`}
-            </span>
-            <span className="flex items-center gap-1 text-emerald-800">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Libre: {isHyp ? `${availableUnits} un.` : `${availableHours.toFixed(1)} h`}
-            </span>
-          </div>
+          <span className="font-label-caps uppercase tracking-wider text-[10px] text-on-surface-variant font-bold">
+            DISTRIBUCIÓN DE LA JORNADA
+          </span>
+          <span className="text-[10px] font-data-mono font-medium text-on-surface-variant/80">
+            Capacidad total: {isHyp ? `${capacityUnits} unidades` : `${capacityHours.toFixed(1)} h/día`}
+          </span>
         </div>
 
-        {/* Progress bar container */}
-        <div className="h-3 w-full overflow-hidden rounded-full bg-surface-container-high flex shadow-inner">
+        {/* Progress bar con guías / texto directamente sobre las barras */}
+        <div className="h-7 w-full overflow-hidden rounded-xl bg-surface-container-high flex shadow-inner border border-outline-variant/40">
           {isHyp ? (
             <>
               <div
                 style={{ width: `${hypCarryoverPct}%` }}
-                className="bg-amber-500 transition-all duration-500"
-                title={`Carga de días anteriores: ${carryoverUnits} unidades`}
-              />
+                className="bg-amber-500 flex items-center justify-center px-2 text-white transition-all duration-500 overflow-hidden"
+                title={`Carga de días anteriores: ${carryoverUnits} unidades (${Math.round(hypCarryoverPct)}%)`}
+              >
+                {hypCarryoverPct > 10 && (
+                  <span className="truncate text-[11px] font-extrabold whitespace-nowrap drop-shadow-xs">
+                    📦 Arrastre: {carryoverUnits} un. ({Math.round(hypCarryoverPct)}%)
+                  </span>
+                )}
+              </div>
               <div
                 style={{ width: `${hypTodayPct}%` }}
-                className="bg-blue-500 transition-all duration-500"
-                title={`Nuevas de hoy: ${todayUnits} unidades`}
-              />
+                className="bg-blue-600 flex items-center justify-center px-2 text-white transition-all duration-500 overflow-hidden"
+                title={`Nuevas de hoy: ${todayUnits} unidades (${Math.round(hypTodayPct)}%)`}
+              >
+                {hypTodayPct > 10 && (
+                  <span className="truncate text-[11px] font-extrabold whitespace-nowrap drop-shadow-xs">
+                    📅 Hoy: {todayUnits} un. ({Math.round(hypTodayPct)}%)
+                  </span>
+                )}
+              </div>
               <div
                 style={{ width: `${hypFreePct}%` }}
-                className="bg-emerald-500 transition-all duration-500"
-                title={`Cupo disponible: ${availableUnits} unidades libres`}
-              />
+                className="bg-emerald-600 flex items-center justify-center px-2 text-white transition-all duration-500 overflow-hidden"
+                title={`Cupo disponible: ${availableUnits} unidades libres (${Math.round(hypFreePct)}%)`}
+              >
+                {hypFreePct > 10 && (
+                  <span className="truncate text-[11px] font-extrabold whitespace-nowrap drop-shadow-xs">
+                    🟢 Libre: {availableUnits} un. ({Math.round(hypFreePct)}%)
+                  </span>
+                )}
+              </div>
             </>
           ) : (
             <>
               <div
                 style={{ width: `${carryoverPct}%` }}
-                className="bg-amber-500 transition-all duration-500"
-                title={`Carga arrastrada de ayer: ${carryoverHours.toFixed(1)} h`}
-              />
+                className="bg-amber-500 flex items-center justify-center px-2 text-white transition-all duration-500 overflow-hidden"
+                title={`Carga arrastrada de ayer: ${carryoverHours.toFixed(1)} h (${Math.round(carryoverPct)}%)`}
+              >
+                {carryoverPct > 10 && (
+                  <span className="truncate text-[11px] font-extrabold whitespace-nowrap drop-shadow-xs">
+                    📦 Arrastre: {carryoverHours.toFixed(1)} h ({Math.round(carryoverPct)}%)
+                  </span>
+                )}
+              </div>
               <div
                 style={{ width: `${todayPct}%` }}
-                className="bg-blue-500 transition-all duration-500"
-                title={`Programadas para hoy: ${todayDemandHours.toFixed(1)} h`}
-              />
+                className="bg-blue-600 flex items-center justify-center px-2 text-white transition-all duration-500 overflow-hidden"
+                title={`Programadas para hoy: ${todayDemandHours.toFixed(1)} h (${Math.round(todayPct)}%)`}
+              >
+                {todayPct > 10 && (
+                  <span className="truncate text-[11px] font-extrabold whitespace-nowrap drop-shadow-xs">
+                    📅 Hoy: {todayDemandHours.toFixed(1)} h ({Math.round(todayPct)}%)
+                  </span>
+                )}
+              </div>
               <div
                 style={{ width: `${freePct}%` }}
-                className="bg-emerald-500 transition-all duration-500"
-                title={`Tiempo libre disponible: ${availableHours.toFixed(1)} h`}
-              />
+                className="bg-emerald-600 flex items-center justify-center px-2 text-white transition-all duration-500 overflow-hidden"
+                title={`Tiempo libre disponible: ${availableHours.toFixed(1)} h (${Math.round(freePct)}%)`}
+              >
+                {freePct > 10 && (
+                  <span className="truncate text-[11px] font-extrabold whitespace-nowrap drop-shadow-xs">
+                    🟢 Libre: {availableHours.toFixed(1)} h ({Math.round(freePct)}%)
+                  </span>
+                )}
+              </div>
             </>
           )}
         </div>
