@@ -351,11 +351,6 @@ const COLUMN_DEFS = {
       </button>
     ),
   },
-  tiempo: {
-    label: 'En taller',
-    cellClassName: `${CELL} truncate font-data-mono text-xs text-on-surface-variant`,
-    render: (wo) => timeSince(wo.receivedAt),
-  },
   refacciones: {
     label: 'Refacciones ($)',
     cellClassName: `${CELL} text-center`,
@@ -463,7 +458,6 @@ const DEFAULT_COLUMN_KEYS = {
     'lavado',
     'estatus',
     'refacciones',
-    'tiempo',
   ],
   HYP: [
     'rank',
@@ -478,7 +472,6 @@ const DEFAULT_COLUMN_KEYS = {
     'estatus',
     'refacciones',
     'transito',
-    'tiempo',
     'aseguradora',
     'reporte',
   ],
@@ -504,7 +497,6 @@ const DEFAULT_COLUMN_WIDTHS = {
   estatus: 170,
   refacciones: 130,
   transito: 110,
-  tiempo: 80,
   aseguradora: 140,
   reporte: 150,
 };
@@ -534,7 +526,7 @@ function loadColumnOrder(orderType) {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_PREFIX + orderType) || 'null');
     if (Array.isArray(stored)) {
-      const filtered = stored.filter((k) => k !== 'acciones' && COLUMN_DEFS[k]);
+      const filtered = stored.filter((k) => k !== 'acciones' && k !== 'tiempo' && COLUMN_DEFS[k]);
       return filtered.length > 0 ? filtered : DEFAULT_COLUMN_KEYS[orderType] || [];
     }
     return DEFAULT_COLUMN_KEYS[orderType] || [];
