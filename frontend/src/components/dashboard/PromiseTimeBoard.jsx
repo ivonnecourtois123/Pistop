@@ -140,132 +140,17 @@ function upcomingDaysWithOrders(workOrders, selectedDate) {
     .map(([key, count]) => ({ key, date: fromDateInputValue(key), count }));
 }
 
-function CardDetailPopover({ workOrder, progress, standardHours, onClose, onSelect, align }) {
-  const alignClass = align === 'left' ? 'left-0' : align === 'right' ? 'right-0' : 'left-1/2 -translate-x-1/2';
-  const today0 = startOfToday();
-  const isCarryover = workOrder.receivedAt && new Date(workOrder.receivedAt) < today0;
-  const std = workOrder.serviceCategory && standardHours ? standardHours[workOrder.serviceCategory] : null;
-
-  // Cálculo de horario estimado de ejecución
-  let startEstText = null;
-  if (workOrder.estimatedDeliveryAt && std) {
-    const delivery = new Date(workOrder.estimatedDeliveryAt);
-    const startEst = new Date(delivery.getTime() - std * 60 * 60 * 1000);
-    startEstText = `${startEst.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} → ${delivery.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}`;
-  }
-
-  return (
-    <div
-      data-card-detail
-      className={`absolute top-full z-50 mt-2 w-72 max-w-[90vw] rounded-xl border border-outline-variant bg-white p-3.5 text-left shadow-xl ${alignClass}`}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-1.5">
-            <p className="font-body-md text-sm font-bold text-primary">#{workOrder.orderNumber}</p>
-            {isCarryover && (
-              <span className="rounded bg-amber-100 px-1.5 py-0.5 font-label-caps text-[9px] font-black text-amber-900 border border-amber-300">
-                Arrastre de ayer
-              </span>
-            )}
-          </div>
-          <p className="font-data-mono text-[11px] text-on-surface-variant font-medium">{workOrder.vehicle?.plate || 'Sin placas'}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="material-symbols-outlined text-sm text-on-surface-variant hover:text-primary cursor-pointer"
-          data-icon="close"
-        >
-          close
-        </button>
-      </div>
-
-      <dl className="space-y-1.5 border-t border-outline-variant/60 pt-2 text-xs">
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="font-label-caps text-[10px] text-on-surface-variant font-semibold">Estatus</dt>
-          <dd className="text-right font-bold text-emerald-700">{STAGE_LABEL[workOrder.status] || workOrder.status}</dd>
-        </div>
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="font-label-caps text-[10px] text-on-surface-variant font-semibold">Técnico</dt>
-          <dd className="text-right text-primary font-medium">{workOrder.technician?.name?.trim() || 'Sin asignar'}</dd>
-        </div>
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="font-label-caps text-[10px] text-on-surface-variant font-semibold">Tipo Servicio</dt>
-          <dd className="text-right font-semibold text-primary">
-            {workOrder.serviceCategory || workOrder.serviceType || 'Sin clasificar'}
-          </dd>
-        </div>
-        {std != null && (
-          <div className="flex items-baseline justify-between gap-2">
-            <dt className="font-label-caps text-[10px] text-on-surface-variant font-semibold">Tiempo Estándar</dt>
-            <dd className="text-right font-data-mono font-bold text-amber-800">{std} h</dd>
-          </div>
-        )}
-        {startEstText && (
-          <div className="flex items-baseline justify-between gap-2">
-            <dt className="font-label-caps text-[10px] text-on-surface-variant font-semibold">Horario Estimado</dt>
-            <dd className="text-right font-data-mono font-bold text-blue-800">{startEstText}</dd>
-          </div>
-        )}
-        <div className="flex items-baseline justify-between gap-2">
-          <dt className="font-label-caps text-[10px] text-on-surface-variant font-semibold">Promesa Entrega</dt>
-          <dd className="text-right font-data-mono text-primary font-bold">
-            {workOrder.estimatedDeliveryAt
-              ? new Date(workOrder.estimatedDeliveryAt).toLocaleString('es-MX', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })
-              : 'Sin definir'}
-          </dd>
-        </div>
-        {workOrder.customerWaiting && (
-          <p className="font-label-caps text-[10px] font-bold text-error">Cliente espera en agencia</p>
-        )}
-      </dl>
-
-      {progress && (
-        <div className="mt-2 border-t border-outline-variant/60 pt-2">
-          <p className="mb-1 flex items-center gap-1.5 font-label-caps text-[10px] text-on-surface-variant font-bold">
-            <span className={`h-2 w-2 shrink-0 rounded-full ${PROGRESS_DOT_CLASS[progress.level]}`} />
-            Semáforo: {PROGRESS_LABEL[progress.level]}
-          </p>
-          <p className="text-xs text-on-surface-variant leading-tight">{progress.label}</p>
-        </div>
-      )}
-
-      {onSelect && (
-        <button
-          type="button"
-          onClick={() => {
-            onClose?.();
-            onSelect(workOrder);
-          }}
-          className="mt-3 w-full flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 font-label-caps text-xs font-bold text-white hover:bg-emerald-700 transition-colors shadow-xs cursor-pointer"
-        >
-          <span className="material-symbols-outlined text-sm">bolt</span>
-          ⚡ Ver Etapas / Actualizar
-        </button>
-      )}
-    </div>
-  );
-}
-
-function VehicleCard({ workOrder, standardHours, open, onToggle, onSelect, align }) {
+function VehicleCard({ workOrder, standardHours, onSelect }) {
   const { vehicle } = workOrder;
   const progress = standardHours ? computeWorkProgress(workOrder, standardHours) : null;
 
   return (
-    <div className={`relative w-full ${open ? 'z-50' : ''}`}>
+    <div className="relative w-full">
       <button
         type="button"
-        data-card-trigger
-        onClick={onToggle}
-        title="Clic para ver detalle de la orden"
-        className={`flex w-full flex-col gap-0.5 rounded-lg border border-outline-variant bg-white px-2.5 py-1.5 text-left transition-all hover:border-primary hover:shadow-xs cursor-pointer shadow-2xs ${
+        onClick={() => onSelect?.(workOrder)}
+        title={`Clic para ver detalle y flujo de etapas de la orden #${workOrder.orderNumber}`}
+        className={`flex w-full flex-col gap-0.5 rounded-lg border border-outline-variant bg-white px-2.5 py-1.5 text-left transition-all hover:border-primary hover:shadow-xs hover:scale-[1.02] cursor-pointer shadow-2xs ${
           progress ? `border-l-4 ${PROGRESS_STRIPE_CLASS[progress.level]}` : ''
         }`}
       >
@@ -276,17 +161,6 @@ function VehicleCard({ workOrder, standardHours, open, onToggle, onSelect, align
           {vehicle?.brand} {vehicle?.model}
         </span>
       </button>
-
-      {open && (
-        <CardDetailPopover
-          workOrder={workOrder}
-          progress={progress}
-          standardHours={standardHours}
-          onClose={onToggle}
-          onSelect={onSelect}
-          align={align}
-        />
-      )}
     </div>
   );
 }
@@ -294,18 +168,6 @@ function VehicleCard({ workOrder, standardHours, open, onToggle, onSelect, align
 export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, opStats }) {
   const [collapsed, setCollapsed] = useState(false);
   const [selectedDate, setSelectedDate] = useState(startOfToday);
-  const [openCardId, setOpenCardId] = useState(null);
-
-  useEffect(() => {
-    if (!openCardId) return undefined;
-    function handleClickOutside(e) {
-      if (!e.target.closest('[data-card-detail]') && !e.target.closest('[data-card-trigger]')) {
-        setOpenCardId(null);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [openCardId]);
 
   const { rows, columns, cells } = useMemo(
     () => buildMatrix(workOrders, selectedDate),
@@ -578,9 +440,6 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
                                       key={wo.id}
                                       workOrder={wo}
                                       standardHours={standardHours}
-                                      align={align}
-                                      open={openCardId === wo.id}
-                                      onToggle={() => setOpenCardId((prev) => (prev === wo.id ? null : wo.id))}
                                       onSelect={onSelect}
                                     />
                                   ))}
