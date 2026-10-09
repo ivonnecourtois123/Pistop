@@ -177,7 +177,6 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
 
   // Comentarios en línea dentro del modal
   const [newModalComment, setNewModalComment] = useState('');
-  const [modalCommentStage, setModalCommentStage] = useState(workOrder.status);
   const [savingModalComment, setSavingModalComment] = useState(false);
 
   async function handleConfirmAdvance() {
@@ -213,7 +212,7 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
     if (!text || savingModalComment) return;
     setSavingModalComment(true);
     try {
-      const updated = await addStageComment(workOrder.id, modalCommentStage || workOrder.status, text);
+      const updated = await addStageComment(workOrder.id, workOrder.status, text);
       onUpdated?.(updated);
       setNewModalComment('');
     } finally {
@@ -223,13 +222,13 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
 
   return (
     <>
-      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 backdrop-blur-xs px-4" onClick={onClose}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-5" onClick={onClose}>
         <div
-          className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl bg-surface-container-lowest shadow-2xl border border-outline-variant"
+          className="flex flex-col max-h-[90vh] w-full max-w-5xl rounded-2xl bg-white shadow-2xl border border-outline-variant overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header Superior */}
-          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-outline-variant bg-white px-6 py-4 rounded-t-2xl shadow-xs">
+          <div className="shrink-0 flex items-center justify-between border-b border-outline-variant bg-white px-5 py-3.5 shadow-2xs">
             <div className="flex items-center gap-3">
               {vehicle.logoUrl && (
                 <img src={vehicle.logoUrl} alt={vehicle.brand} className="h-9 w-9 object-contain" />
@@ -268,11 +267,11 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
 
           {/* Pestañas para HYP (Etapas vs Expediente con Checklist) */}
           {workOrder.orderType === 'HYP' && (
-            <div className="flex border-b border-outline-variant bg-surface-container-low px-6">
+            <div className="shrink-0 flex border-b border-outline-variant bg-surface-container-low px-5">
               <button
                 type="button"
                 onClick={() => setActiveTab('ETAPAS')}
-                className={`flex items-center gap-2 border-b-2 px-4 py-3 font-headline-md text-xs font-bold transition-colors cursor-pointer ${
+                className={`flex items-center gap-2 border-b-2 px-4 py-2.5 font-headline-md text-xs font-bold transition-colors cursor-pointer ${
                   activeTab === 'ETAPAS'
                     ? 'border-emerald-600 text-emerald-800 font-extrabold bg-white'
                     : 'border-transparent text-on-surface-variant hover:text-primary'
@@ -284,7 +283,7 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
               <button
                 type="button"
                 onClick={() => setActiveTab('EXPEDIENTE')}
-                className={`flex items-center gap-2 border-b-2 px-4 py-3 font-headline-md text-xs font-bold transition-colors cursor-pointer ${
+                className={`flex items-center gap-2 border-b-2 px-4 py-2.5 font-headline-md text-xs font-bold transition-colors cursor-pointer ${
                   activeTab === 'EXPEDIENTE'
                     ? 'border-emerald-600 text-emerald-800 font-extrabold bg-white'
                     : 'border-transparent text-on-surface-variant hover:text-primary'
@@ -296,7 +295,7 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
             </div>
           )}
 
-          <div className="p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-5 space-y-5">
             {activeTab === 'EXPEDIENTE' && workOrder.orderType === 'HYP' ? (
               <div className="rounded-xl border border-outline-variant bg-white p-5">
                 <ExpedienteChecklist
@@ -308,31 +307,31 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
               </div>
             ) : (
               <>
-                {/* BARRA DE ACCIÓN RÁPIDA DE ESTATUS */}
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border-2 border-emerald-500/60 bg-emerald-50/70 p-4 shadow-xs">
+                {/* BARRA DE ACCIÓN RÁPIDA DE ESTATUS (DISEÑO NEUTRO PARA RESALTAR EL PIPELINE) */}
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-outline-variant/80 bg-surface-container-low/60 p-3.5">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white font-black text-lg shadow-sm">
-                      ⚡
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary font-black text-sm">
+                      <span className="material-symbols-outlined text-xl">alt_route</span>
                     </span>
                     <div>
-                      <p className="font-label-caps text-[10px] text-emerald-900 font-bold uppercase">
+                      <p className="font-label-caps text-[10px] text-on-surface-variant font-bold uppercase">
                         Estado Actual de la Orden
                       </p>
-                      <h3 className="font-headline-lg text-lg font-black text-emerald-900 flex items-center gap-2">
+                      <h3 className="font-headline-md text-base font-bold text-primary flex items-center gap-2">
                         {STAGE_LABEL[workOrder.status] || workOrder.status}
-                        <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-[10px] font-extrabold text-white">
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold text-primary">
                           Paso {currentIndex + 1} de {STAGES.length}
                         </span>
                       </h3>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
                     {nextStage && (
                       <button
                         type="button"
                         onClick={handleQuickAdvanceNext}
-                        className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 font-label-caps text-xs font-extrabold text-white shadow-sm hover:bg-emerald-700 hover:shadow transition-all cursor-pointer"
+                        className="flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 font-label-caps text-xs font-bold text-white shadow-2xs hover:bg-primary/90 transition-all cursor-pointer"
                         title={`Avanzar a ${nextStage.label}`}
                       >
                         <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -345,7 +344,7 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
                       onChange={(e) => {
                         if (e.target.value) setPendingStage(e.target.value);
                       }}
-                      className="rounded-xl border border-outline-variant bg-white px-3 py-2 text-xs font-semibold text-primary shadow-2xs focus:border-emerald-600 focus:outline-none cursor-pointer"
+                      className="rounded-xl border border-outline-variant bg-white px-3 py-2 text-xs font-semibold text-primary shadow-2xs focus:border-primary focus:outline-none cursor-pointer"
                     >
                       <option value="">Cambiar a cualquier etapa...</option>
                       {STAGES.map((s, idx) => (
@@ -519,61 +518,23 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
                           </div>
                         )}
                       </div>
-
-                      {/* Botones de comentario rápido */}
-                      <div className="mt-3 flex flex-wrap gap-1.5 items-center">
-                        <span className="text-[10px] text-on-surface-variant font-semibold">Atajos:</span>
-                        {[
-                          '📞 Cliente notificado',
-                          '📦 Esperando refacción',
-                          '🔧 En prueba de ruta',
-                          '🧼 Listo para lavado',
-                          '🚗 Listo para entrega',
-                        ].map((chip) => (
-                          <button
-                            key={chip}
-                            type="button"
-                            onClick={() => handleAddModalCommentSubmit(null, chip)}
-                            disabled={savingModalComment}
-                            className="rounded-full border border-outline-variant bg-white px-2 py-0.5 text-[10px] text-on-surface-variant hover:border-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
-                          >
-                            {chip}
-                          </button>
-                        ))}
-                      </div>
                     </div>
 
-                    <form onSubmit={handleAddModalCommentSubmit} className="mt-3 pt-3 border-t border-outline-variant/60 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] text-on-surface-variant font-semibold">Etapa:</span>
-                        <select
-                          value={modalCommentStage}
-                          onChange={(e) => setModalCommentStage(e.target.value)}
-                          className="rounded-lg border border-outline-variant bg-surface px-2 py-1 text-xs text-primary font-medium focus:border-emerald-600 focus:outline-none"
-                        >
-                          {STAGES.map((s) => (
-                            <option key={s.key} value={s.key}>
-                              {s.label} {s.key === workOrder.status ? ' (Actual)' : ''}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={newModalComment}
-                          onChange={(e) => setNewModalComment(e.target.value)}
-                          placeholder="Escribe un nuevo comentario o nota de seguimiento..."
-                          className="flex-1 rounded-lg border border-outline-variant bg-surface px-3 py-1.5 text-xs text-primary focus:border-emerald-600 focus:bg-white focus:outline-none"
-                        />
-                        <button
-                          type="submit"
-                          disabled={savingModalComment || !newModalComment.trim()}
-                          className="rounded-lg bg-emerald-600 px-4 py-1.5 font-label-caps text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-40 transition-all cursor-pointer shadow-xs"
-                        >
-                          {savingModalComment ? 'Guardando...' : 'Comentar'}
-                        </button>
-                      </div>
+                    <form onSubmit={handleAddModalCommentSubmit} className="mt-3 pt-3 border-t border-outline-variant/60 flex gap-2">
+                      <input
+                        type="text"
+                        value={newModalComment}
+                        onChange={(e) => setNewModalComment(e.target.value)}
+                        placeholder="Escribe un nuevo comentario o nota de seguimiento..."
+                        className="flex-1 rounded-lg border border-outline-variant bg-surface px-3 py-2 text-xs text-primary focus:border-primary focus:bg-white focus:outline-none"
+                      />
+                      <button
+                        type="submit"
+                        disabled={savingModalComment || !newModalComment.trim()}
+                        className="rounded-lg bg-primary px-4 py-2 font-label-caps text-xs font-bold text-white hover:bg-primary/90 disabled:opacity-40 transition-all cursor-pointer shadow-xs whitespace-nowrap"
+                      >
+                        {savingModalComment ? 'Guardando...' : 'Comentar'}
+                      </button>
                     </form>
                   </div>
                 </div>
