@@ -79,22 +79,99 @@ async function generateOrderNumber() {
 }
 
 async function create(data, advisorId) {
-  const orderNumber = data.orderNumber ? data.orderNumber.toUpperCase() : await generateOrderNumber();
+  let vehicleId = data.vehicleId;
+
+  // Si se pasan datos de vehículo (creación directa o importación SIA NXT)
+  if (!vehicleId && data.vehicle) {
+    const { brand, model, year, plate, vin, customerName, customerPhone, customerEmail, color } = data.vehicle;
+    const cleanPlate = plate ? plate.trim().toUpperCase() : 'SIN-PLACA';
+    const cleanVin = vin ? vin.trim().toUpperCase() : `VIN-${Date.now().toString().slice(-6)}`;
+
+    // Buscar si ya existe el vehículo por placa
+    const existingVehicle = await prisma.vehicle.findFirst({
+      where: { plate: cleanPlate },
+      include: { customer: true },
+    });
+
+    if (existingVehicle) {
+      vehicleId = existingVehicle.id;
+    } else {
+      // Buscar o crear cliente
+      let customer = null;
+      if (customerName && customerName.trim()) {
+        customer = await prisma.customer.findFirst({
+          where: { name: customerName.trim() },
+        });
+        if (!customer) {
+          customer = await prisma.customer.create({
+            data: {
+              name: customerName.trim(),
+              phone: customerPhone?.trim() || null,
+              email: customerEmail?.trim() || null,
+            },
+          });
+        }
+      } else {
+        customer = await prisma.customer.create({
+          data: { name: 'Cliente General' },
+        });
+      }
+
+      const newVehicle = await prisma.vehicle.create({
+        data: {
+          brand: brand?.trim().toUpperCase() || 'GENERAL',
+          model: model?.trim() || 'Modelo',
+          year: year ? Number(year) : new Date().getFullYear(),
+          color: color?.trim() || null,
+          plate: cleanPlate,
+          vin: cleanVin,
+          customerId: customer.id,
+        },
+      });
+      vehicleId = newVehicle.id;
+    }
+  }
+
+  if (!vehicleId) {
+    throw ApiError.badRequest('Se requiere un vehículo para crear la orden de trabajo');
+  }
+
+  const orderNumber = data.orderNumber ? data.orderNumber.trim().toUpperCase() : await generateOrderNumber();
+
+  // Validar duplicidad de orden
+  const existingOrder = await prisma.workOrder.findUnique({
+    where: { orderNumber },
+  });
+  if (existingOrder) {
+    throw ApiError.badRequest(`La orden de trabajo ${orderNumber} ya existe`);
+  }
+
   const orderType = data.orderType ?? 'SERVICIO';
   const initialStatus = getStageOrder(orderType)[0];
+  const technicianId = data.technicianId || null;
 
   return prisma.workOrder.create({
     data: {
       orderNumber,
       orderType,
       status: initialStatus,
-      vehicleId: data.vehicleId,
-      technicianId: data.technicianId ?? null,
+      vehicleId,
+      technicianId,
+      technicianAssignedAt: technicianId ? new Date() : null,
       advisorId: advisorId ?? null,
+      serviceType: data.serviceType?.trim() || null,
+      serviceCategory: data.serviceCategory ?? null,
+      agency: data.agency?.trim() || null,
+      customerWaiting: Boolean(data.customerWaiting),
+      washNeeded: Boolean(data.washNeeded),
+      diagnosisNeeded: Boolean(data.diagnosisNeeded),
+      partsNeeded: Boolean(data.partsNeeded),
+      insurer: data.insurer?.trim() || null,
+      reportNumber: data.reportNumber?.trim() || null,
       estimatedDeliveryAt: data.estimatedDeliveryAt ?? null,
-      notes: data.notes ?? null,
+      notes: data.notes?.trim() || null,
       statusEvents: {
-        create: { status: initialStatus },
+        create: { status: initialStatus, note: 'Orden creada en sistema (SIA NXT)' },
       },
     },
     include: INCLUDE_RELATIONS,

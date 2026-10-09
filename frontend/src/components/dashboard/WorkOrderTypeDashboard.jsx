@@ -6,6 +6,7 @@ import InProgressList from './InProgressList.jsx';
 import PromiseTimeBoard from './PromiseTimeBoard.jsx';
 import HypDeliveryAgenda from './HypDeliveryAgenda.jsx';
 import OrderStageDetailModal from './OrderStageDetailModal.jsx';
+import NewWorkOrderModal from './NewWorkOrderModal.jsx';
 import Spinner from '../common/Spinner.jsx';
 import MaintenanceQuoter from '../quoter/MaintenanceQuoter.jsx';
 import { getTodayStats, getInProgressWorkOrders, getWorkOrder } from '../../api/workOrders.js';
@@ -37,6 +38,7 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
   const [capacityRefreshKey, setCapacityRefreshKey] = useState(0);
   const [standardHours, setStandardHours] = useState(null);
   const [agingFilter, setAgingFilter] = useState(null); // null | 'with_parts' | 'over15' | 'over30' | 'over60'
+  const [showNewOrderModal, setShowNewOrderModal] = useState(false);
 
   const loadStats = useCallback(async () => {
     const data = await getTodayStats(orderType);
@@ -241,32 +243,44 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
               </div>
             </div>
 
-            {/* Buscador de órdenes discreto y elegante */}
-            <div className="relative w-full sm:w-72 md:w-80 shrink-0">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-base text-on-surface-variant/70">
-                search
-              </span>
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={
-                  orderType === 'HYP'
-                    ? 'Buscar Orden, Placas, VIN, Siniestro...'
-                    : 'Buscar Orden, Placas o VIN...'
-                }
-                className="w-full rounded-xl border border-outline-variant bg-white pl-9 pr-8 py-2 text-xs font-medium text-primary shadow-2xs placeholder:text-on-surface-variant/60 focus:border-primary focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all"
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant/70 hover:text-primary cursor-pointer"
-                  title="Limpiar búsqueda"
-                >
-                  <span className="material-symbols-outlined text-sm">close</span>
-                </button>
-              )}
+            {/* Acciones principales: Nueva Orden y Buscador */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowNewOrderModal(true)}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 font-label-caps text-xs font-bold text-white shadow-xs hover:bg-primary/90 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap"
+              >
+                <span className="material-symbols-outlined text-base">add_circle</span>
+                <span>Nueva Orden de Reparación</span>
+              </button>
+
+              {/* Buscador de órdenes discreto y elegante */}
+              <div className="relative w-full sm:w-64 md:w-72 shrink-0">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-base text-on-surface-variant/70">
+                  search
+                </span>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={
+                    orderType === 'HYP'
+                      ? 'Buscar Orden, Placas, VIN, Siniestro...'
+                      : 'Buscar Orden, Placas o VIN...'
+                  }
+                  className="w-full rounded-xl border border-outline-variant bg-white pl-9 pr-8 py-2 text-xs font-medium text-primary shadow-2xs placeholder:text-on-surface-variant/60 focus:border-primary focus:bg-white focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant/70 hover:text-primary cursor-pointer"
+                    title="Limpiar búsqueda"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -505,6 +519,18 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
           onClose={() => setDetailOrder(null)}
           onUpdated={handleDetailOrderUpdated}
           standardHours={standardHours}
+        />
+      )}
+
+      {/* Modal para Crear Nueva Orden de Reparación (SIA NXT) */}
+      {showNewOrderModal && (
+        <NewWorkOrderModal
+          orderType={orderType}
+          onClose={() => setShowNewOrderModal(false)}
+          onCreated={() => {
+            handleOrderUpdated();
+            setShowNewOrderModal(false);
+          }}
         />
       )}
     </div>

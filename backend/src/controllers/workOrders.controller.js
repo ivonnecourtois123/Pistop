@@ -5,10 +5,30 @@ const { ALL_STAGE_KEYS, ORDER_TYPES, ALL_SUB_STATES } = require('../utils/workOr
 const { SERVICE_CATEGORIES } = require('../utils/priority');
 
 const createSchema = z.object({
-  vehicleId: z.string().uuid(),
-  technicianId: z.string().uuid().optional(),
-  orderNumber: z.string().optional(),
+  vehicleId: z.string().uuid().optional(),
+  vehicle: z.object({
+    brand: z.string().min(1),
+    model: z.string().min(1),
+    year: z.coerce.number().optional(),
+    color: z.string().optional(),
+    plate: z.string().min(1),
+    vin: z.string().optional(),
+    customerName: z.string().min(1).optional(),
+    customerPhone: z.string().optional(),
+    customerEmail: z.string().optional(),
+  }).optional(),
+  technicianId: z.union([z.null(), z.string().uuid()]).optional(),
+  orderNumber: z.string().min(1).optional(),
   orderType: z.enum(ORDER_TYPES).optional(),
+  serviceType: z.string().optional(),
+  serviceCategory: z.union([z.null(), z.enum(SERVICE_CATEGORIES)]).optional(),
+  agency: z.string().optional(),
+  customerWaiting: z.boolean().optional(),
+  washNeeded: z.boolean().optional(),
+  diagnosisNeeded: z.boolean().optional(),
+  partsNeeded: z.boolean().optional(),
+  insurer: z.union([z.null(), z.string()]).optional(),
+  reportNumber: z.union([z.null(), z.string()]).optional(),
   estimatedDeliveryAt: z.coerce.date().optional(),
   notes: z.string().optional(),
 });
