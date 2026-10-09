@@ -443,23 +443,6 @@ const COLUMN_DEFS = {
       />
     ),
   },
-  acciones: {
-    label: 'Acciones',
-    cellClassName: `${CELL} text-center`,
-    render: (wo, { onSelect }) => (
-      <button
-        type="button"
-        onClick={() => onSelect?.(wo)}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 font-label-caps text-[11px] font-bold text-white shadow-xs hover:bg-emerald-700 hover:shadow-md transition-all cursor-pointer"
-        title="Ver etapas, cambiar estatus y bitácora de seguimientos"
-      >
-        <span className="material-symbols-outlined text-sm" data-icon="bolt">
-          bolt
-        </span>
-        ⚡ Ver Etapas
-      </button>
-    ),
-  },
 };
 
 const DEFAULT_COLUMN_KEYS = {
@@ -481,7 +464,6 @@ const DEFAULT_COLUMN_KEYS = {
     'estatus',
     'refacciones',
     'tiempo',
-    'acciones',
   ],
   HYP: [
     'rank',
@@ -499,7 +481,6 @@ const DEFAULT_COLUMN_KEYS = {
     'tiempo',
     'aseguradora',
     'reporte',
-    'acciones',
   ],
 };
 
@@ -526,7 +507,6 @@ const DEFAULT_COLUMN_WIDTHS = {
   tiempo: 80,
   aseguradora: 140,
   reporte: 150,
-  acciones: 120,
 };
 
 const MIN_COLUMN_WIDTH = 55;
@@ -553,7 +533,11 @@ function saveColumnWidths(orderType, widths) {
 function loadColumnOrder(orderType) {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_PREFIX + orderType) || 'null');
-    return Array.isArray(stored) ? stored : DEFAULT_COLUMN_KEYS[orderType] || [];
+    if (Array.isArray(stored)) {
+      const filtered = stored.filter((k) => k !== 'acciones' && COLUMN_DEFS[k]);
+      return filtered.length > 0 ? filtered : DEFAULT_COLUMN_KEYS[orderType] || [];
+    }
+    return DEFAULT_COLUMN_KEYS[orderType] || [];
   } catch {
     return DEFAULT_COLUMN_KEYS[orderType] || [];
   }
