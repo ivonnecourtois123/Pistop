@@ -228,18 +228,13 @@ const COLUMN_DEFS = {
     render: (wo, { onStatusChanged }) => {
       const badge = promiseBadge(wo.estimatedDeliveryAt);
       return (
-        <div>
+        <div className="flex flex-col gap-1">
           <PromiseDateSelector workOrder={wo} onUpdated={onStatusChanged} />
           {badge && (
-            <div className="mt-1 flex items-center gap-1.5">
-              <span className={`rounded-full px-2 py-0.5 font-label-caps text-[9px] ${badge.className}`}>
+            <div>
+              <span className={`inline-block rounded-full px-2 py-0.5 font-label-caps text-[9px] ${badge.className}`}>
                 {badge.text}
               </span>
-              {wo.estimatedDeliveryAt && (
-                <span className="font-data-mono text-[10px] text-on-surface-variant">
-                  {formatDateTimeShort(wo.estimatedDeliveryAt)}
-                </span>
-              )}
             </div>
           )}
         </div>
@@ -274,11 +269,6 @@ const COLUMN_DEFS = {
         </span>
       );
     },
-  },
-  entrega: {
-    label: 'Hora de entrega',
-    cellClassName: CELL,
-    render: (wo, { onStatusChanged }) => <PromiseDateSelector workOrder={wo} onUpdated={onStatusChanged} />,
   },
   servicio: {
     label: 'Tipo de servicio',
@@ -489,7 +479,6 @@ const DEFAULT_COLUMN_WIDTHS = {
   promesa: 170,
   kms: 90,
   antiguedad: 90,
-  entrega: 140,
   servicio: 160,
   tecnico: 150,
   diagnostico: 90,
