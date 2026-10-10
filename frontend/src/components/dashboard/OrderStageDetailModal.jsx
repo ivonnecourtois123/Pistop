@@ -148,7 +148,7 @@ function StageCard({
           Notas ({commentCount})
         </button>
 
-        {extra && <div className="mt-1 flex flex-col items-center gap-1">{extra}</div>}
+        {extra && <div className="mt-1 flex flex-col w-full items-stretch gap-1">{extra}</div>}
       </div>
     </div>
   );
@@ -338,21 +338,6 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
                         Avanzar a: {nextStage.label}
                       </button>
                     )}
-
-                    <select
-                      value=""
-                      onChange={(e) => {
-                        if (e.target.value) setPendingStage(e.target.value);
-                      }}
-                      className="rounded-xl border border-outline-variant bg-white px-3 py-2 text-xs font-semibold text-primary shadow-2xs focus:border-primary focus:outline-none cursor-pointer"
-                    >
-                      <option value="">Cambiar a cualquier etapa...</option>
-                      {STAGES.map((s, idx) => (
-                        <option key={s.key} value={s.key}>
-                          {idx + 1}. {s.label} {s.key === workOrder.status ? ' (Actual)' : ''}
-                        </option>
-                      ))}
-                    </select>
 
                     <label className="flex items-center gap-1.5 cursor-pointer bg-white px-3 py-1.5 rounded-xl border border-outline-variant">
                       <InlineCheckbox

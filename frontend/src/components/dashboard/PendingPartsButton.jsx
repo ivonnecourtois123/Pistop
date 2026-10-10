@@ -81,21 +81,23 @@ export default function PendingPartsButton({ workOrder, onUpdated, align = 'cent
   const alignClass = align === 'left' ? 'left-0' : align === 'right' ? 'right-0' : 'left-1/2 -translate-x-1/2';
 
   return (
-    <div className="relative" ref={containerRef} onClick={(e) => e.stopPropagation()}>
+    <div className="relative w-full" ref={containerRef} onClick={(e) => e.stopPropagation()}>
       <button
         type="button"
         onClick={() => updateOpen(!open)}
-        title="Refacciones pendientes"
-        className={`flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-1 font-label-caps text-[10px] transition-colors ${
+        title={pendingCount > 0 ? `Refacciones pendientes (${pendingCount})` : 'Refacciones de la orden'}
+        className={`w-full flex items-center justify-center gap-1 rounded-md border px-1.5 py-0.5 font-label-caps text-[9px] font-bold transition-colors cursor-pointer ${
           pendingCount > 0
-            ? 'border-error bg-error-container/40 text-on-error-container'
-            : 'border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary'
+            ? 'border-error/60 bg-error-container/20 text-on-error-container hover:bg-error-container/40'
+            : 'border-outline-variant/60 bg-white/80 text-on-surface-variant hover:border-primary hover:text-primary'
         }`}
       >
-        <span className="material-symbols-outlined text-xs" data-icon="inventory_2">
+        <span className="material-symbols-outlined text-[11px]" data-icon="inventory_2">
           inventory_2
         </span>
-        {pendingCount > 0 ? `Refacciones pendientes (${pendingCount})` : 'Refacciones pendientes'}
+        <span className="truncate">
+          {pendingCount > 0 ? `Refac. pend. (${pendingCount})` : 'Refacciones'}
+        </span>
       </button>
 
       {open && (
