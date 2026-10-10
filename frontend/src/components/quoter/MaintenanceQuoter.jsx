@@ -12,7 +12,7 @@ import QuotationPrintModal from './QuotationPrintModal.jsx';
 export default function MaintenanceQuoter() {
   // Inputs del Asesor
   const [brand, setBrand] = useState('NISSAN');
-  const [modelId, setModelId] = useState('versa');
+  const [modelId, setModelId] = useState('march_versa_n17');
   const [year, setYear] = useState('2024');
   const [mileage, setMileage] = useState(10000);
   const [customMileage, setCustomMileage] = useState('');
@@ -69,8 +69,11 @@ export default function MaintenanceQuoter() {
     const partsSubtotal = selectedPackage.partsSubtotal + upsellsParts;
     const laborSubtotal = selectedPackage.laborSubtotal + upsellsLabor;
     const subtotal = partsSubtotal + laborSubtotal;
-    const iva = Math.round(subtotal * 0.16);
-    const total = subtotal + iva;
+    
+    // Si el paquete ya tiene su total oficial asignado (como en matriz CHESA Nissan)
+    const baseTotal = selectedPackage.total || subtotal;
+    const total = baseTotal + upsellsParts + upsellsLabor;
+    const iva = selectedPackage.iva || Math.round((subtotal) * 0.16);
 
     return {
       partsSubtotal,
@@ -374,11 +377,25 @@ export default function MaintenanceQuoter() {
                     <span className="font-label-caps text-[10px] font-bold text-primary uppercase block">
                       Refacciones Originales ({pkg.parts.length}):
                     </span>
-                    <ul className="space-y-1 text-xs text-on-surface">
+                    <ul className="space-y-1 text-xs text-on-surface max-h-44 overflow-y-auto pr-1">
                       {pkg.parts.map((p, idx) => (
-                        <li key={idx} className="flex items-start gap-1.5">
-                          <span className="material-symbols-outlined text-xs text-emerald-600 mt-0.5">check_circle</span>
-                          <span className="leading-tight text-[11px] font-medium">{p.name}</span>
+                        <li key={idx} className="flex items-start justify-between gap-1.5 py-0.5 border-b border-outline-variant/30 last:border-none text-[11px]">
+                          <div className="flex items-start gap-1 min-w-0">
+                            <span className="material-symbols-outlined text-xs text-emerald-600 mt-0.5 shrink-0">check_circle</span>
+                            <div className="min-w-0">
+                              <span className="font-medium text-slate-800 leading-tight block truncate">{p.name}</span>
+                              {p.partNumber && p.partNumber !== 'REF' && (
+                                <span className="text-[9px] font-data-mono text-slate-400">
+                                  #{p.partNumber} {p.qty > 1 ? `(${p.qty} pzas)` : ''}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {p.cost > 0 && (
+                            <span className="font-data-mono text-[10px] text-slate-500 font-semibold shrink-0">
+                              ${p.cost.toLocaleString()}
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>

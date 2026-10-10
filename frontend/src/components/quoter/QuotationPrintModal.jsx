@@ -215,7 +215,16 @@ ${upsellsText}
                 <tbody className="divide-y divide-slate-100">
                   {selectedPackage.parts.map((part, i) => (
                     <tr key={`part-${i}`} className="hover:bg-slate-50">
-                      <td className="p-2.5 text-slate-800 font-medium">📦 {part.name}</td>
+                      <td className="p-2.5 text-slate-800 font-medium">
+                        <div>
+                          <span>📦 {part.name}</span>
+                          {part.partNumber && part.partNumber !== 'REF' && (
+                            <span className="text-[10px] text-slate-500 font-data-mono block ml-5">
+                              #Parte: {part.partNumber} {part.qty > 1 ? `• Cantidad: ${part.qty}` : ''}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="p-2.5 text-center text-slate-500 font-data-mono text-[10px]">Refacción Original</td>
                       <td className="p-2.5 text-right font-data-mono font-medium text-slate-700">
                         ${part.cost.toLocaleString()} MXN
@@ -259,13 +268,15 @@ ${upsellsText}
                 <span className="font-data-mono font-semibold">${totalCalculations.laborSubtotal.toLocaleString()} MXN</span>
               </div>
               <div className="flex justify-between text-slate-600">
-                <span>Subtotal sin IVA:</span>
+                <span>Subtotal Neto:</span>
                 <span className="font-data-mono font-semibold">${totalCalculations.subtotal.toLocaleString()} MXN</span>
               </div>
-              <div className="flex justify-between text-slate-600">
-                <span>I.V.A. (16%):</span>
-                <span className="font-data-mono font-semibold">${totalCalculations.iva.toLocaleString()} MXN</span>
-              </div>
+              {totalCalculations.iva > 0 && (
+                <div className="flex justify-between text-slate-600">
+                  <span>I.V.A. (16%):</span>
+                  <span className="font-data-mono font-semibold">${totalCalculations.iva.toLocaleString()} MXN</span>
+                </div>
+              )}
               <div className="flex justify-between border-t-2 border-slate-300 pt-2 text-base font-black text-slate-900">
                 <span>TOTAL A PAGAR:</span>
                 <span className="font-data-mono text-emerald-700">${totalCalculations.total.toLocaleString()} MXN</span>
