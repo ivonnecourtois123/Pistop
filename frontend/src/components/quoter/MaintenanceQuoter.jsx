@@ -8,6 +8,7 @@ import {
 } from '../../constants/maintenancePackages.js';
 import { DEFAULT_AGENCIES } from '../../constants/immobilized.js';
 import QuotationPrintModal from './QuotationPrintModal.jsx';
+import ExcelUploadModal from './ExcelUploadModal.jsx';
 
 export default function MaintenanceQuoter() {
   // Inputs del Asesor
@@ -21,11 +22,30 @@ export default function MaintenanceQuoter() {
   const [plate, setPlate] = useState('');
   const [advisorName, setAdvisorName] = useState('Asesor de Servicio');
 
-  // Paquete seleccionado y opcionales
+  // Catálogo personalizado desde Excel
+  const [customCatalog, setCustomCatalog] = useState(() => {
+    try {
+      const stored = localStorage.getItem('pitstop.customMaintenanceCatalog');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [customCatalogMeta, setCustomCatalogMeta] = useState(() => {
+    try {
+      const stored = localStorage.getItem('pitstop.customMaintenanceCatalogMeta');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Modales
   const [selectedPackageId, setSelectedPackageId] = useState('recommended');
   const [selectedUpsellIds, setSelectedUpsellIds] = useState(['alineacion_balanceo']);
   const [showPrintModal, setShowPrintModal] = useState(false);
-  const [showExcelStructureModal, setShowExcelStructureModal] = useState(false);
+  const [showExcelUploadModal, setShowExcelUploadModal] = useState(false);
   const [copiedQuick, setCopiedQuick] = useState(false);
 
   // Modelos según la marca activa
@@ -51,8 +71,8 @@ export default function MaintenanceQuoter() {
 
   // Obtener los 3 paquetes generados para este vehículo y kilometraje
   const packages = useMemo(() => {
-    return getMaintenancePackages(brand, activeModel?.id, effectiveMileage);
-  }, [brand, activeModel, effectiveMileage]);
+    return getMaintenancePackages(brand, activeModel?.id, effectiveMileage, customCatalog);
+  }, [brand, activeModel, effectiveMileage, customCatalog]);
 
   const selectedPackage = packages.find((p) => p.id === selectedPackageId) || packages[1] || packages[0];
 
@@ -141,15 +161,23 @@ export default function MaintenanceQuoter() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowExcelStructureModal(true)}
-            className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-primary transition-colors cursor-pointer"
-            title="Ver catálogo y estructura oficial"
-          >
-            <span className="material-symbols-outlined text-sm text-emerald-600">table_chart</span>
-            Catálogo Excel
-          </button>
+          <div className="flex items-center gap-2">
+            {customCatalogMeta && (
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-900 border border-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                Matriz Activa: {customCatalogMeta.fileName}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowExcelUploadModal(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-emerald-600/40 bg-emerald-50/80 px-3.5 py-1.5 text-xs font-bold text-emerald-800 shadow-2xs hover:bg-emerald-100 hover:border-emerald-600 transition-all cursor-pointer"
+              title="Subir o actualizar paquetes de mantenimiento desde un archivo Excel"
+            >
+              <span className="material-symbols-outlined text-sm text-emerald-600">upload_file</span>
+              Actualizar Catálogo Excel
+            </button>
+          </div>
         </div>
 
         {/* 1.1 Grid de Modelo, Año, Agencia y Cliente */}
@@ -557,103 +585,25 @@ export default function MaintenanceQuoter() {
         />
       )}
 
-      {/* Modal Informativo: Estructura del Archivo Excel para Alimentar el Catálogo */}
-      {showExcelStructureModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-outline-variant pb-3">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-emerald-600 text-xl">table_chart</span>
-                <h3 className="font-headline-md text-base font-bold text-primary">
-                  Formato de Catálogo Excel para Paquetes de Mantenimiento
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowExcelStructureModal(false)}
-                className="rounded-lg p-1 text-on-surface-variant hover:bg-surface-container"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <p className="text-xs text-on-surface-variant leading-relaxed">
-              El cotizador está estructurado para que puedas alimentar o actualizar todos los paquetes, precios y
-              refacciones directamente desde tu archivo de Excel. El archivo debe incluir las siguientes columnas:
-            </p>
-
-            <div className="rounded-xl border border-outline-variant overflow-hidden text-xs">
-              <table className="w-full border-collapse">
-                <thead className="bg-slate-100 font-bold text-primary text-left">
-                  <tr>
-                    <th className="p-2 border-b">Columna</th>
-                    <th className="p-2 border-b">Tipo</th>
-                    <th className="p-2 border-b">Ejemplo</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant/60">
-                  <tr>
-                    <td className="p-2 font-bold font-data-mono">MARCA</td>
-                    <td className="p-2 text-on-surface-variant">Texto</td>
-                    <td className="p-2 text-slate-700">NISSAN, CHANGAN, RENAULT</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 font-bold font-data-mono">MODELO</td>
-                    <td className="p-2 text-on-surface-variant">Texto</td>
-                    <td className="p-2 text-slate-700">Versa, Kicks, CS35 Plus, Kwid</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 font-bold font-data-mono">KILOMETRAJE</td>
-                    <td className="p-2 text-on-surface-variant">Número</td>
-                    <td className="p-2 text-slate-700">10000, 20000, 40000</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 font-bold font-data-mono">TIPO_PAQUETE</td>
-                    <td className="p-2 text-on-surface-variant">Texto</td>
-                    <td className="p-2 text-slate-700">BÁSICO, RECOMENDADO, PREMIUM</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 font-bold font-data-mono">REFACCIONES_INCLUIDAS</td>
-                    <td className="p-2 text-on-surface-variant">Lista separada por comas</td>
-                    <td className="p-2 text-slate-700">Aceite 0W-20, Filtro Aceite, Arandela</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 font-bold font-data-mono">COSTO_REFACCIONES</td>
-                    <td className="p-2 text-on-surface-variant">Moneda (MXN)</td>
-                    <td className="p-2 text-slate-700">$1,250.00</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 font-bold font-data-mono">HORAS_MO / COSTO_MO</td>
-                    <td className="p-2 text-on-surface-variant">Moneda (MXN)</td>
-                    <td className="p-2 text-slate-700">$850.00</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-xs text-blue-900 space-y-1">
-              <span className="font-bold flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">info</span>
-                ¿Tienes listo tu archivo de Excel?
-              </span>
-              <p>
-                Puedes compartir o pegar los datos de tu archivo de Excel aquí en el chat para cargarlos de inmediato al
-                catálogo del sistema.
-              </p>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <button
-                type="button"
-                onClick={() => setShowExcelStructureModal(false)}
-                className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white hover:bg-primary/90 cursor-pointer"
-              >
-                Entendido
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal para Subir / Actualizar Excel Dinámicamente */}
+      <ExcelUploadModal
+        isOpen={showExcelUploadModal}
+        onClose={() => setShowExcelUploadModal(false)}
+        currentCustomCatalog={customCatalog}
+        onCatalogUpdated={(newCat) => {
+          setCustomCatalog(newCat);
+          try {
+            const meta = JSON.parse(localStorage.getItem('pitstop.customMaintenanceCatalogMeta') || 'null');
+            setCustomCatalogMeta(meta);
+          } catch {
+            // safe
+          }
+        }}
+        onRestoreDefaults={() => {
+          setCustomCatalog(null);
+          setCustomCatalogMeta(null);
+        }}
+      />
     </div>
   );
 }

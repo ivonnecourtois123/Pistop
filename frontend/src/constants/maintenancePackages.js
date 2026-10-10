@@ -17285,12 +17285,13 @@ export const CHESA_NISSAN_CATALOG = {
   }
 };
 
-export function getMaintenancePackages(brand = 'NISSAN', modelId = 'versa_n18', km = 10000) {
+export function getMaintenancePackages(brand = 'NISSAN', modelId = 'versa_n18', km = 10000, customCatalog = null) {
+  const activeCatalog = customCatalog || CHESA_NISSAN_CATALOG;
   const effectiveModelId = MODEL_ALIASES[modelId] || modelId;
 
-  // Si la marca es NISSAN y tenemos el modelo en el catálogo oficial CHESA
-  if (brand === 'NISSAN' && CHESA_NISSAN_CATALOG[effectiveModelId]) {
-    const modelData = CHESA_NISSAN_CATALOG[effectiveModelId];
+  // Si tenemos el modelo en el catálogo activo (oficial o personalizado)
+  if (activeCatalog && activeCatalog[effectiveModelId]) {
+    const modelData = activeCatalog[effectiveModelId];
     const tiers = ['basic', 'recommended', 'premium'];
 
     const resultPackages = tiers.map(tierId => {
