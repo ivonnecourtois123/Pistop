@@ -128,42 +128,27 @@ const COLUMN_DEFS = {
   unidad: {
     label: 'Unidad',
     cellClassName: CELL,
-    render: (wo, { onSelect }) => (
-      <button
-        type="button"
-        onClick={() => onSelect?.(wo)}
-        className="group flex items-center gap-2 text-left hover:opacity-90 transition-opacity cursor-pointer"
-        title="Clic para abrir etapas y expediente"
-      >
+    render: (wo) => (
+      <div className="flex items-center gap-2 text-left">
         {wo.vehicle?.logoUrl && (
           <img src={wo.vehicle.logoUrl} alt={wo.vehicle.brand} className="h-7 w-7 shrink-0 object-contain" />
         )}
         <div className="min-w-0">
-          <p className="truncate font-body-md text-sm font-bold text-primary group-hover:text-emerald-700 group-hover:underline">
+          <p className="truncate font-body-md text-sm font-bold text-primary">
             {wo.vehicle?.brand} {wo.vehicle?.model}
             {wo.vehicle?.year ? ` ${wo.vehicle.year}` : ''}
           </p>
-          <p className="font-data-mono text-[11px] text-on-surface-variant flex items-center gap-1">
-            <span>{wo.vehicle?.plate || 'Sin placas'}</span>
-            <span className="text-[10px] text-emerald-600 font-bold opacity-80 group-hover:opacity-100">⚡ Ver</span>
+          <p className="font-data-mono text-[11px] text-on-surface-variant">
+            {wo.vehicle?.plate || 'Sin placas'}
           </p>
         </div>
-      </button>
+      </div>
     ),
   },
   orden: {
     label: '# OR',
     cellClassName: `${CELL} truncate font-data-mono text-xs font-bold text-primary`,
-    render: (wo, { onSelect }) => (
-      <button
-        type="button"
-        onClick={() => onSelect?.(wo)}
-        className="font-data-mono text-xs font-bold text-primary hover:text-emerald-700 hover:underline cursor-pointer flex items-center gap-0.5"
-        title="Clic para abrir etapas"
-      >
-        #{wo.orderNumber}
-      </button>
-    ),
+    render: (wo) => `#${wo.orderNumber}`,
   },
   marca: {
     label: 'Marca',
@@ -344,7 +329,7 @@ const COLUMN_DEFS = {
   refacciones: {
     label: 'Refacciones ($)',
     cellClassName: `${CELL} text-center`,
-    render: (wo, { onSelect }) => {
+    render: (wo) => {
       const parts = wo.pendingParts || [];
       const count = parts.length;
       const totalAmount = parts.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
@@ -359,15 +344,13 @@ const COLUMN_DEFS = {
       }
 
       return (
-        <button
-          type="button"
-          onClick={() => onSelect?.(wo)}
-          className={`group inline-flex flex-col items-center justify-center rounded-lg px-2.5 py-1 border transition-all cursor-pointer shadow-2xs hover:scale-[1.02] ${
+        <div
+          className={`inline-flex flex-col items-center justify-center rounded-lg px-2.5 py-1 border shadow-2xs ${
             pendingCount > 0
-              ? 'bg-amber-50/90 border-amber-300 hover:bg-amber-100 text-amber-950'
-              : 'bg-emerald-50/90 border-emerald-300 hover:bg-emerald-100 text-emerald-950'
+              ? 'bg-amber-50/90 border-amber-300 text-amber-950'
+              : 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
           }`}
-          title={`${count} refacción(es) cargada(s). ${pendingCount} en proceso. Monto: $${totalAmount.toLocaleString()} MXN. Clic para ver`}
+          title={`${count} refacción(es) cargada(s). ${pendingCount} en proceso. Monto: $${totalAmount.toLocaleString()} MXN.`}
         >
           <span className="font-data-mono text-xs font-black text-emerald-800">
             ${totalAmount.toLocaleString()} <span className="text-[9px] font-normal">MXN</span>
@@ -378,7 +361,7 @@ const COLUMN_DEFS = {
             </span>
             {count} refac. {pendingCount > 0 ? `(${pendingCount} pend.)` : '(listas)'}
           </span>
-        </button>
+        </div>
       );
     },
   },
