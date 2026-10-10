@@ -105,81 +105,54 @@ export default function MaintenanceQuoter() {
 
   return (
     <div className="w-full space-y-6">
-      {/* Banner Superior Explicativo */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-white p-5 shadow-sm">
-        <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md">
-            <span className="material-symbols-outlined text-2xl">calculate</span>
-          </span>
-          <div>
-            <h2 className="font-headline-md text-base font-black text-primary flex items-center gap-2">
-              Cotizador Inteligente de Mantenimientos — Grupo Prosur
-              <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-[10px] font-bold text-white uppercase tracking-wider">
-                Venta y Asesoría
-              </span>
-            </h2>
-            <p className="font-body-md text-xs text-on-surface-variant max-w-2xl">
-              Selecciona el <strong>Vehículo</strong> y el <strong>Kilometraje</strong> para obtener
-              inmediatamente las opciones de paquetes (Básico, Recomendado y Premium), desglose de refacciones,
-              mano de obra, y cotizar al cliente en segundos por WhatsApp o formato formal.
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowExcelStructureModal(true)}
-          className="flex items-center gap-1.5 rounded-xl border border-primary/30 bg-white px-3.5 py-2 text-xs font-bold text-primary shadow-xs hover:bg-primary/5 transition-all cursor-pointer"
-        >
-          <span className="material-symbols-outlined text-base text-emerald-600">table_chart</span>
-          Ver Estructura Excel / Catálogo
-        </button>
-      </div>
-
       {/* SECCIÓN 1: SELECTOR DE VEHÍCULO Y KILOMETRAJE */}
-      <div className="rounded-2xl border border-outline-variant bg-white p-5 shadow-sm space-y-5">
-        <div className="border-b border-outline-variant/60 pb-3 flex items-center justify-between">
-          <h3 className="font-headline-md text-sm font-bold text-primary flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-white text-xs font-bold">
-              1
-            </span>
-            Datos del Vehículo y Kilometraje
-          </h3>
-          <span className="text-[11px] text-on-surface-variant font-medium">
-            Solo 2 datos principales requeridos para cotizar
-          </span>
-        </div>
+      <div className="rounded-2xl border border-outline-variant bg-white p-5 shadow-sm space-y-4">
+        <div className="border-b border-outline-variant/60 pb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <h3 className="font-headline-md text-sm font-bold text-primary flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-white text-xs font-bold">
+                1
+              </span>
+              Datos del Vehículo y Kilometraje
+            </h3>
 
-        {/* 1.1 Selector de Marca */}
-        <div className="space-y-2">
-          <label className="font-label-caps text-xs font-bold text-on-surface-variant uppercase">
-            Marca del Vehículo:
-          </label>
-          <div className="grid grid-cols-3 gap-3 max-w-lg">
-            {SUPPORTED_BRANDS.map((b) => {
-              const isSel = brand === b;
-              return (
-                <button
-                  key={b}
-                  type="button"
-                  onClick={() => handleBrandChange(b)}
-                  className={`flex items-center justify-center gap-2 rounded-xl border-2 py-2.5 px-4 font-headline-md text-xs font-extrabold transition-all cursor-pointer ${
-                    isSel
-                      ? 'border-emerald-600 bg-emerald-50/70 text-emerald-900 shadow-xs ring-2 ring-emerald-300'
-                      : 'border-outline-variant bg-slate-50 text-on-surface-variant hover:bg-white hover:border-primary/40'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-base">
-                    {b === 'NISSAN' ? 'directions_car' : b === 'CHANGAN' ? 'electric_car' : 'airport_shuttle'}
-                  </span>
-                  {b}
-                </button>
-              );
-            })}
+            {/* Selector visual de Marca con check */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-outline-variant/60">
+              {SUPPORTED_BRANDS.map((b) => {
+                const isSel = brand === b;
+                return (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => handleBrandChange(b)}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-bold transition-all cursor-pointer ${
+                      isSel
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:bg-white hover:text-primary'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-xs">
+                      {isSel ? 'check_circle' : 'radio_button_unchecked'}
+                    </span>
+                    {b}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setShowExcelStructureModal(true)}
+            className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-primary transition-colors cursor-pointer"
+            title="Ver catálogo y estructura oficial"
+          >
+            <span className="material-symbols-outlined text-sm text-emerald-600">table_chart</span>
+            Catálogo Excel
+          </button>
         </div>
 
-        {/* 1.2 Grid de Modelo, Año, Agencia y Cliente */}
+        {/* 1.1 Grid de Modelo, Año, Agencia y Cliente */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="font-label-caps text-[11px] font-bold text-on-surface-variant uppercase block mb-1">
