@@ -208,7 +208,7 @@ const COLUMN_DEFS = {
     ),
   },
   promesa: {
-    label: 'Promesa (Fecha/Hora)',
+    label: 'Fecha Promesa Entrega',
     cellClassName: CELL,
     render: (wo, { onStatusChanged }) => {
       const badge = promiseBadge(wo.estimatedDeliveryAt);
@@ -270,7 +270,7 @@ const COLUMN_DEFS = {
     ),
   },
   tecnico: {
-    label: 'Técnico asignado',
+    label: 'Técnico Asignado',
     cellClassName: CELL,
     render: (wo, { onStatusChanged }) => <TechnicianSelector workOrder={wo} onUpdated={onStatusChanged} />,
   },
@@ -286,7 +286,7 @@ const COLUMN_DEFS = {
     ),
   },
   lavado: {
-    label: 'Con lavado',
+    label: 'Lavado',
     cellClassName: `${CELL} text-center`,
     render: (wo, { onStatusChanged }) => (
       <InlineCheckbox
@@ -297,7 +297,7 @@ const COLUMN_DEFS = {
     ),
   },
   estatus: {
-    label: 'Estatus (Clic p/ actualizar)',
+    label: 'Estatus',
     cellClassName: CELL,
     render: (wo, { onSelect, progress }) => (
       <button
@@ -327,7 +327,7 @@ const COLUMN_DEFS = {
     ),
   },
   refacciones: {
-    label: 'Refacciones ($)',
+    label: 'Refacciones',
     cellClassName: `${CELL} text-center`,
     render: (wo) => {
       const parts = wo.pendingParts || [];
@@ -415,15 +415,11 @@ const COLUMN_DEFS = {
 
 const DEFAULT_COLUMN_KEYS = {
   SERVICIO: [
-    'rank',
-    'unidad',
     'agencia',
     'orden',
-    'torre',
-    'color',
+    'unidad',
     'cliente',
     'promesa',
-    'kms',
     'antiguedad',
     'servicio',
     'tecnico',
@@ -433,49 +429,39 @@ const DEFAULT_COLUMN_KEYS = {
     'refacciones',
   ],
   HYP: [
-    'rank',
-    'unidad',
     'agencia',
     'orden',
-    'color',
+    'unidad',
     'cliente',
     'promesa',
     'antiguedad',
+    'servicio',
     'tecnico',
+    'diagnostico',
+    'lavado',
     'estatus',
     'refacciones',
-    'transito',
-    'aseguradora',
-    'reporte',
   ],
 };
 
 const DEFAULT_COLUMN_WIDTHS = {
-  rank: 48,
-  unidad: 200,
-  marca: 90,
-  agencia: 130,
-  orden: 85,
-  torre: 80,
-  color: 90,
+  agencia: 135,
+  orden: 95,
+  unidad: 210,
   cliente: 160,
-  promesa: 170,
-  kms: 90,
-  antiguedad: 90,
+  promesa: 175,
+  antiguedad: 95,
   servicio: 160,
   tecnico: 150,
   diagnostico: 90,
-  lavado: 90,
-  estatus: 170,
+  lavado: 80,
+  estatus: 165,
   refacciones: 130,
-  transito: 110,
-  aseguradora: 140,
-  reporte: 150,
 };
 
 const MIN_COLUMN_WIDTH = 55;
-const WIDTH_STORAGE_PREFIX = 'pitstop.inProgressColumnWidths.';
-const STORAGE_PREFIX = 'pitstop.inProgressColumns.';
+const WIDTH_STORAGE_PREFIX = 'pitstop.inProgressColumnWidths.v5.';
+const STORAGE_PREFIX = 'pitstop.inProgressColumns.v5.';
 
 function loadColumnWidths(orderType) {
   try {
@@ -496,12 +482,13 @@ function saveColumnWidths(orderType, widths) {
 
 function loadColumnOrder(orderType) {
   try {
+    const validDefaults = DEFAULT_COLUMN_KEYS[orderType] || [];
     const stored = JSON.parse(localStorage.getItem(STORAGE_PREFIX + orderType) || 'null');
     if (Array.isArray(stored)) {
-      const filtered = stored.filter((k) => k !== 'acciones' && k !== 'tiempo' && COLUMN_DEFS[k]);
-      return filtered.length > 0 ? filtered : DEFAULT_COLUMN_KEYS[orderType] || [];
+      const filtered = stored.filter((k) => validDefaults.includes(k) && COLUMN_DEFS[k]);
+      return filtered.length === validDefaults.length ? filtered : validDefaults;
     }
-    return DEFAULT_COLUMN_KEYS[orderType] || [];
+    return validDefaults;
   } catch {
     return DEFAULT_COLUMN_KEYS[orderType] || [];
   }
