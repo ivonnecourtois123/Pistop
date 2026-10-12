@@ -46,8 +46,7 @@ export default function QuotationPrintModal({
         : '';
 
     return `🚗 *COTIZACIÓN DE MANTENIMIENTO — GRUPO PROSUR*
-📍 *Agencia:* ${agency}
-📄 *Folio:* ${quotationNumber}
+${agency ? `📍 *Agencia:* ${agency}\n` : ''}📄 *Folio:* ${quotationNumber}
 📅 *Fecha:* ${date}
 
 👤 *Cliente:* ${clientName || 'Apreciable Cliente'}
@@ -153,7 +152,7 @@ ${upsellsText}
                 </span>
               </div>
               <p className="text-xs text-slate-600 font-medium mt-0.5">
-                Centro de Servicio Automotriz Autorizado — {agency}
+                Centro de Servicio Automotriz Autorizado{agency ? ` — ${agency}` : ''}
               </p>
             </div>
             <div className="text-right">
