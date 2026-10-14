@@ -227,12 +227,9 @@ async function processDmsRows(rawRows, options = {}) {
       ...(row.entradaDate ? { receivedAt: row.entradaDate } : {}),
     };
 
-    const existing = await prisma.workOrder.findUnique({
-      where: { orderNumber: row.orderNumber },
-    });
-
+    let workOrderId;
     if (!existing) {
-      await prisma.workOrder.create({
+      const created = await prisma.workOrder.create({
         data: {
           orderNumber: row.orderNumber,
           orderType: 'SERVICIO',
@@ -246,17 +243,46 @@ async function processDmsRows(rawRows, options = {}) {
           },
         },
       });
+      workOrderId = created.id;
       createdCount++;
       processedOrders.push({ orderNumber: row.orderNumber, action: 'created' });
     } else {
-      await prisma.workOrder.update({
+      const updated = await prisma.workOrder.update({
         where: { id: existing.id },
         data: updateData,
       });
+      workOrderId = updated.id;
       updatedCount++;
       processedOrders.push({ orderNumber: row.orderNumber, action: 'updated' });
     }
-  }
+
+    // Si el Excel trae monto en Refacciones, sincronizar el registro de refacciones
+    if (row.refaccionesAmount > 0) {
+      const existingPart = await prisma.pendingPart.findFirst({
+        where: { workOrderId },
+      });
+      if (!existingPart) {
+        await prisma.pendingPart.create({
+          data: {
+            workOrderId,
+            partNumber: 'REF-DMS',
+            description: 'Refacciones asignadas en DMS',
+            orderNumber: row.orderNumber,
+            orderDate: row.entradaDate || new Date(),
+            amount: row.refaccionesAmount,
+            received: true,
+          },
+        });
+      } else {
+        await prisma.pendingPart.update({
+          where: { id: existingPart.id },
+          data: {
+            amount: row.refaccionesAmount,
+            received: true,
+          },
+        });
+      }
+    }
 
   return {
     success: true,

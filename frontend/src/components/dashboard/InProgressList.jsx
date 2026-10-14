@@ -335,31 +335,21 @@ const COLUMN_DEFS = {
       const totalAmount = parts.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
       const pendingCount = parts.filter((p) => !p.received).length;
 
-      if (count === 0) {
+      if (totalAmount <= 0) {
         return (
-          <span className="text-on-surface-variant/40 text-[11px] italic font-medium">
-            Sin refac.
+          <span className="text-on-surface-variant/40 text-[11px] font-data-mono">
+            $0
           </span>
         );
       }
 
       return (
         <div
-          className={`inline-flex flex-col items-center justify-center rounded-lg px-2.5 py-1 border shadow-2xs ${
-            pendingCount > 0
-              ? 'bg-amber-50/90 border-amber-300 text-amber-950'
-              : 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
-          }`}
-          title={`${count} refacción(es) cargada(s). ${pendingCount} en proceso. Monto: $${totalAmount.toLocaleString()} MXN.`}
+          className="inline-flex items-center justify-center rounded-lg px-2.5 py-1 border border-emerald-300 bg-emerald-50/90 text-emerald-950 shadow-2xs"
+          title={`Refacciones cargadas en DMS: $${totalAmount.toLocaleString()} MXN`}
         >
           <span className="font-data-mono text-xs font-black text-emerald-800">
-            ${totalAmount.toLocaleString()} <span className="text-[9px] font-normal">MXN</span>
-          </span>
-          <span className="text-[10px] font-bold flex items-center gap-1 opacity-90">
-            <span className="material-symbols-outlined text-xs">
-              {pendingCount > 0 ? 'hourglass_top' : 'check_circle'}
-            </span>
-            {count} refac. {pendingCount > 0 ? `(${pendingCount} pend.)` : '(listas)'}
+            ${totalAmount.toLocaleString()} <span className="text-[9px] font-normal text-emerald-700">MXN</span>
           </span>
         </div>
       );
