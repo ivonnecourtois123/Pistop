@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { syncDmsRows, cleanDemoOrders } from '../../api/dmsSync.js';
-import { DEFAULT_AGENCIES } from '../../constants/immobilized.js';
+import { DEFAULT_AGENCIES, getAgencyBrand } from '../../constants/immobilized.js';
 
 export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
   const [file, setFile] = useState(null);
@@ -206,6 +206,12 @@ export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
                     </option>
                   ))}
                 </select>
+                {assignAgency && (
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2 py-1 text-[11px] font-extrabold text-white shadow-2xs">
+                    <span className="material-symbols-outlined text-xs">verified</span>
+                    {getAgencyBrand(selectedAgency) || 'NISSAN'}
+                  </span>
+                )}
               </div>
             </div>
           </div>

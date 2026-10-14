@@ -67,11 +67,30 @@ export const AGENCY_CODE_MAP = {
   'TENOSIQUE': 'Tenosique',
 };
 
+// Mapeo de Agencias a Marcas del Grupo (base inicial, se completará con el catálogo exacto)
+export const AGENCY_BRAND_MAP = {
+  'San Cristóbal': 'NISSAN',
+  'Tuxtla Poniente': 'NISSAN',
+  'Tuxtla Oriente': 'NISSAN',
+  'Tapachula': 'NISSAN',
+  'Comitán': 'NISSAN',
+  'Palenque': 'NISSAN',
+  'Ocosingo': 'NISSAN',
+  'Tenosique': 'NISSAN',
+};
+
 export function getFullAgencyName(rawCodeOrName) {
   if (!rawCodeOrName) return 'Sin agencia';
   const clean = String(rawCodeOrName).trim().toUpperCase();
   return AGENCY_CODE_MAP[clean] || rawCodeOrName;
 }
+
+export function getAgencyBrand(rawCodeOrName) {
+  if (!rawCodeOrName) return null;
+  const fullName = getFullAgencyName(rawCodeOrName);
+  return AGENCY_BRAND_MAP[fullName] || null;
+}
+
 
 // Checklist de documentos base y específicos por Aseguradora
 export const INSURER_DOCUMENT_CHECKLISTS = {

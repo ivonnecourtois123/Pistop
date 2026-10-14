@@ -12,7 +12,7 @@ import Spinner from '../common/Spinner.jsx';
 import MaintenanceQuoter from '../quoter/MaintenanceQuoter.jsx';
 import { getTodayStats, getInProgressWorkOrders, getWorkOrder } from '../../api/workOrders.js';
 import { getServiceCategoryHours } from '../../api/capacity.js';
-import { GROUP_BRANDS, DEFAULT_AGENCIES, getFullAgencyName } from '../../constants/immobilized.js';
+import { GROUP_BRANDS, DEFAULT_AGENCIES, getFullAgencyName, getAgencyBrand } from '../../constants/immobilized.js';
 
 function matchesSearch(workOrder, term, { includeReportNumber } = {}) {
   const needle = term.trim().toUpperCase();
@@ -93,14 +93,8 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
     }
   }
 
-  // Lista consolidada de marcas disponibles
-  const availableBrands = useMemo(() => {
-    const set = new Set(GROUP_BRANDS);
-    inProgressList.forEach((wo) => {
-      if (wo.vehicle?.brand) set.add(wo.vehicle.brand.toUpperCase());
-    });
-    return Array.from(set).sort();
-  }, [inProgressList]);
+  // Lista consolidada de marcas disponibles (estrictamente marcas oficiales del Grupo)
+  const availableBrands = GROUP_BRANDS;
 
   // Lista consolidada de agencias disponibles
   const availableAgencies = useMemo(() => {
@@ -127,10 +121,10 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
       if (!matchesSearch(wo, searchTerm, { includeReportNumber: orderType === 'HYP' })) {
         return false;
       }
-      // 2. Filtro por marca
+      // 2. Filtro por marca (la marca pertenece a la Agencia/Taller, sin importar el auto multimarca)
       if (brandFilter !== 'ALL') {
-        const b = (wo.vehicle?.brand || '').trim().toUpperCase();
-        if (!b.includes(brandFilter.toUpperCase())) return false;
+        const agencyBrand = (getAgencyBrand(wo.agency || wo.tower) || wo.vehicle?.brand || '').trim().toUpperCase();
+        if (agencyBrand !== brandFilter.toUpperCase()) return false;
       }
       // 3. Filtro por agencia / sucursal
       if (agencyFilter !== 'ALL') {
@@ -159,8 +153,8 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
     const baseList = inProgressList.filter((wo) => {
       if (!matchesSearch(wo, searchTerm, { includeReportNumber: orderType === 'HYP' })) return false;
       if (brandFilter !== 'ALL') {
-        const b = (wo.vehicle?.brand || '').trim().toUpperCase();
-        if (!b.includes(brandFilter.toUpperCase())) return false;
+        const agencyBrand = (getAgencyBrand(wo.agency || wo.tower) || wo.vehicle?.brand || '').trim().toUpperCase();
+        if (agencyBrand !== brandFilter.toUpperCase()) return false;
       }
       if (agencyFilter !== 'ALL') {
         const woAgency = getFullAgencyName(wo.agency || wo.tower || '').trim().toLowerCase();
@@ -387,9 +381,10 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
                   </button>
                   {availableBrands.map((b) => {
                     const isSelected = brandFilter.toUpperCase() === b.toUpperCase();
-                    const countForBrand = inProgressList.filter((wo) =>
-                      (wo.vehicle?.brand || '').toUpperCase().includes(b)
-                    ).length;
+                    const countForBrand = inProgressList.filter((wo) => {
+                      const agencyBrand = (getAgencyBrand(wo.agency || wo.tower) || wo.vehicle?.brand || '').trim().toUpperCase();
+                      return agencyBrand === b.toUpperCase();
+                    }).length;
 
                     return (
                       <button
