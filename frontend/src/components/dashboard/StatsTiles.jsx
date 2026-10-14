@@ -58,7 +58,7 @@ export default function StatsTiles({
           <div className="mt-2">
             <div className="flex items-baseline gap-1">
               <p className="font-data-mono text-xl font-black text-emerald-800">
-                ${(stats?.partsAmount ?? 0).toLocaleString()}
+                ${(stats?.partsAmount ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <span className="text-[10px] font-bold text-emerald-900">MXN</span>
             </div>
@@ -92,7 +92,16 @@ export default function StatsTiles({
               </p>
               <span className="text-[11px] font-bold text-amber-700">órdenes</span>
             </div>
-            <p className="text-[10px] text-amber-800/80 mt-0.5">15 a 30 días en taller</p>
+            <div className="mt-1 flex items-center gap-1 font-data-mono text-xs font-bold text-amber-950">
+              <span className="material-symbols-outlined text-[13px] text-amber-700" data-icon="payments">
+                payments
+              </span>
+              <span>
+                ${(stats?.partsAmountOver15 ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span className="text-[9px] font-bold text-amber-800">MXN</span>
+            </div>
+            <p className="text-[10px] text-amber-800/80 mt-1">15 a 30 días en taller</p>
           </div>
         </button>
 
@@ -122,7 +131,16 @@ export default function StatsTiles({
               </p>
               <span className="text-[11px] font-bold text-orange-700">órdenes</span>
             </div>
-            <p className="text-[10px] text-orange-800/80 mt-0.5">31 a 60 días • Atención</p>
+            <div className="mt-1 flex items-center gap-1 font-data-mono text-xs font-bold text-orange-950">
+              <span className="material-symbols-outlined text-[13px] text-orange-700" data-icon="payments">
+                payments
+              </span>
+              <span>
+                ${(stats?.partsAmountOver30 ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span className="text-[9px] font-bold text-orange-800">MXN</span>
+            </div>
+            <p className="text-[10px] text-orange-800/80 mt-1">31 a 60 días • Atención</p>
           </div>
         </button>
 
@@ -152,7 +170,16 @@ export default function StatsTiles({
               </p>
               <span className="text-[11px] font-bold text-rose-700">órdenes</span>
             </div>
-            <p className="text-[10px] text-rose-800/80 mt-0.5">Meta: máx 1 • Críticas</p>
+            <div className="mt-1 flex items-center gap-1 font-data-mono text-xs font-bold text-rose-950">
+              <span className="material-symbols-outlined text-[13px] text-rose-700" data-icon="payments">
+                payments
+              </span>
+              <span>
+                ${(stats?.partsAmountOver60 ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span className="text-[9px] font-bold text-rose-800">MXN</span>
+            </div>
+            <p className="text-[10px] text-rose-800/80 mt-1">Meta: máx 1 • Críticas</p>
           </div>
         </button>
       </div>
@@ -167,9 +194,9 @@ export default function StatsTiles({
             </span>
             <span className="rounded-full bg-primary/10 px-2 py-0.5 font-bold text-[11px] text-primary">
               {activeAgingFilter === 'with_parts' && 'Órdenes con refacciones cargadas'}
-              {activeAgingFilter === 'over15' && 'Órdenes de 15 a 30 días'}
-              {activeAgingFilter === 'over30' && 'Órdenes de 31 a 60 días'}
-              {activeAgingFilter === 'over60' && 'Órdenes críticas con más de 60 días'}
+              {activeAgingFilter === 'over15' && `Órdenes de 15 a 30 días ($${(stats?.partsAmountOver15 ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN en refac.)`}
+              {activeAgingFilter === 'over30' && `Órdenes de 31 a 60 días ($${(stats?.partsAmountOver30 ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN en refac.)`}
+              {activeAgingFilter === 'over60' && `Órdenes críticas con más de 60 días ($${(stats?.partsAmountOver60 ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN en refac.)`}
             </span>
           </div>
           <button

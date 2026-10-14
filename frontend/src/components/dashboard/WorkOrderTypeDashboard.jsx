@@ -182,20 +182,36 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
 
     // Clasificaciones de órdenes Rezagadas por Antigüedad
     const activeOrders = baseList.filter((wo) => !['TERMINADO', 'ENTREGADO'].includes(wo.status));
-    const ordersOver15 = activeOrders.filter((wo) => {
+
+    const listOver15 = activeOrders.filter((wo) => {
       const d = daysSince(wo.receivedAt);
       return d >= 15 && d <= 30;
-    }).length;
+    });
+    const ordersOver15 = listOver15.length;
+    const partsAmountOver15 = listOver15.reduce((acc, wo) => {
+      const woSum = wo.pendingParts?.reduce((pSum, p) => pSum + (Number(p.amount) || 0), 0) || 0;
+      return acc + woSum;
+    }, 0);
 
-    const ordersOver30 = activeOrders.filter((wo) => {
+    const listOver30 = activeOrders.filter((wo) => {
       const d = daysSince(wo.receivedAt);
       return d > 30 && d <= 60;
-    }).length;
+    });
+    const ordersOver30 = listOver30.length;
+    const partsAmountOver30 = listOver30.reduce((acc, wo) => {
+      const woSum = wo.pendingParts?.reduce((pSum, p) => pSum + (Number(p.amount) || 0), 0) || 0;
+      return acc + woSum;
+    }, 0);
 
-    const ordersOver60 = activeOrders.filter((wo) => {
+    const listOver60 = activeOrders.filter((wo) => {
       const d = daysSince(wo.receivedAt);
       return d > 60;
-    }).length;
+    });
+    const ordersOver60 = listOver60.length;
+    const partsAmountOver60 = listOver60.reduce((acc, wo) => {
+      const woSum = wo.pendingParts?.reduce((pSum, p) => pSum + (Number(p.amount) || 0), 0) || 0;
+      return acc + woSum;
+    }, 0);
 
     const rezagados = activeOrders.filter((wo) => daysSince(wo.receivedAt) >= 1).length;
 
@@ -210,8 +226,11 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
       ordersWithParts,
       partsAmount,
       ordersOver15,
+      partsAmountOver15,
       ordersOver30,
+      partsAmountOver30,
       ordersOver60,
+      partsAmountOver60,
       rezagados,
     };
   }, [stats, inProgressList, brandFilter, agencyFilter, searchTerm, orderType]);
