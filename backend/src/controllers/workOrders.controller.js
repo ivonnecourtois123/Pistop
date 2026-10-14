@@ -283,14 +283,31 @@ async function listServiceCategoryHours(req, res) {
   res.json(data);
 }
 
+async function createServiceCategoryHours(req, res) {
+  const { category, hours } = req.body;
+  if (!category || typeof category !== 'string' || !category.trim()) {
+    return res.status(400).json({ error: 'El nombre o clave de la categoría es requerido' });
+  }
+  const cleanCategory = category.trim().toUpperCase().replace(/\s+/g, '_');
+  const numHours = parseFloat(hours);
+  if (isNaN(numHours) || numHours < 0) {
+    return res.status(400).json({ error: 'Las horas deben ser un número mayor o igual a 0' });
+  }
+  const data = await workOrdersService.updateServiceCategoryHours(cleanCategory, numHours);
+  res.status(201).json(data);
+}
+
 async function updateServiceCategoryHours(req, res) {
   const { category } = req.params;
-  if (!SERVICE_CATEGORIES.includes(category)) {
-    return res.status(400).json({ error: `Categoría inválida: ${category}` });
-  }
   const { hours } = serviceCategoryHoursSchema.parse(req.body);
   const data = await workOrdersService.updateServiceCategoryHours(category, hours);
   res.json(data);
+}
+
+async function deleteServiceCategoryHours(req, res) {
+  const { category } = req.params;
+  await workOrdersService.deleteServiceCategoryHours(category);
+  res.json({ success: true, message: `Tipo de servicio ${category} eliminado` });
 }
 
 async function getStageDurationsReport(req, res) {
@@ -339,7 +356,9 @@ module.exports = {
   getCapacitySettings,
   updateCapacitySettings,
   listServiceCategoryHours,
+  createServiceCategoryHours,
   updateServiceCategoryHours,
+  deleteServiceCategoryHours,
   getStageDurationsReport,
   getPendingPartsReport,
   getExecutiveKpisReport,

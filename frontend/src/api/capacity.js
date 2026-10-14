@@ -24,3 +24,13 @@ export async function updateServiceCategoryHours(category, hours) {
   const { data } = await apiClient.patch(`/work-orders/capacity/service-category-hours/${category}`, { hours });
   return data;
 }
+
+export async function createServiceCategoryHours(category, hours) {
+  const { data } = await apiClient.post('/work-orders/capacity/service-category-hours', { category, hours });
+  return data;
+}
+
+export async function deleteServiceCategoryHours(category) {
+  const { data } = await apiClient.delete(`/work-orders/capacity/service-category-hours/${category}`);
+  return data;
+}

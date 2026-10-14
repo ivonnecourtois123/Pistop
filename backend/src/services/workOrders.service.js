@@ -677,6 +677,12 @@ async function updateServiceCategoryHours(category, hours) {
   });
 }
 
+async function deleteServiceCategoryHours(category) {
+  return prisma.serviceCategoryHours.delete({
+    where: { category },
+  });
+}
+
 module.exports = {
   search,
   getById,
@@ -705,4 +711,5 @@ module.exports = {
   updateCapacitySettings,
   listServiceCategoryHours,
   updateServiceCategoryHours,
+  deleteServiceCategoryHours,
 };
