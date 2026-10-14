@@ -263,31 +263,45 @@ export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
                     <tr>
                       <th className="p-2"># Orden</th>
                       <th className="p-2">Entrada</th>
-                      <th className="p-2">Placas</th>
-                      <th className="p-2">Línea</th>
+                      <th className="p-2">Placas / Serie</th>
+                      <th className="p-2">Línea / Vehículo</th>
                       <th className="p-2">Cliente</th>
-                      <th className="p-2">Trabajo</th>
+                      <th className="p-2">Refacciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {parsedRows.slice(0, 4).map((row, i) => {
                       const keys = Object.keys(row);
-                      const getV = (sub) => {
-                        const k = keys.find((key) => key.trim().toUpperCase().includes(sub));
-                        return k ? row[k] : '—';
+                      const getV = (subs) => {
+                        const candidates = Array.isArray(subs) ? subs : [subs];
+                        for (const sub of candidates) {
+                          const k = keys.find((key) => key.trim().toUpperCase().includes(sub.toUpperCase()));
+                          if (k && row[k] != null && String(row[k]).trim() !== '') {
+                            return String(row[k]).trim();
+                          }
+                        }
+                        return '—';
                       };
                       return (
                         <tr key={i} className="hover:bg-slate-50">
                           <td className="p-2 font-bold font-data-mono text-primary">
-                            {getV('ORDEN')}
+                            {getV(['ORDEN', 'OT', 'ORDER'])}
                           </td>
-                          <td className="p-2 text-slate-600">{getV('ENTRADA')}</td>
-                          <td className="p-2 font-data-mono font-bold">{getV('PLACA')}</td>
-                          <td className="p-2 text-slate-700">{getV('LINEA')}</td>
+                          <td className="p-2 text-slate-600 font-data-mono">
+                            {getV(['FECENT', 'ENTRADA', 'FECHA'])}
+                          </td>
+                          <td className="p-2 font-data-mono font-bold">
+                            {getV(['PLACA', 'SERIE', 'VIN'])}
+                          </td>
+                          <td className="p-2 text-slate-700">
+                            {getV(['TIPOVEH', 'LINEA', 'MODELO'])}
+                          </td>
                           <td className="p-2 text-slate-600 truncate max-w-[140px]">
-                            {getV('CLIENTE')}
+                            {getV(['NOMBRE', 'CLIENTE'])}
                           </td>
-                          <td className="p-2 text-slate-700">{getV('TRABAJO')}</td>
+                          <td className="p-2 text-slate-700 font-data-mono font-bold text-emerald-800">
+                            {getV(['TOTREF', 'REFACCIONES', 'TOTAL'])}
+                          </td>
                         </tr>
                       );
                     })}

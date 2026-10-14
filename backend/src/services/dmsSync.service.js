@@ -26,31 +26,63 @@ function parseYesNo(value) {
   return null;
 }
 
-// "YYYY-MM-DD" o "M/D/YY" o Date
-function parseEntradaDate(raw, hour = 9) {
-  if (!raw) return null;
-  if (raw instanceof Date && !isNaN(raw.getTime())) {
-    return raw;
+function applyDmsTime(d, timeRaw, defaultHour = 9) {
+  let hour = defaultHour;
+  let min = 0;
+  if (timeRaw != null && timeRaw !== '') {
+    const tStr = String(timeRaw).replace(/^'/, '').trim();
+    const colonMatch = tStr.match(/^(\d{1,2}):(\d{2})/);
+    if (colonMatch) {
+      hour = parseInt(colonMatch[1], 10);
+      min = parseInt(colonMatch[2], 10);
+    } else {
+      const digits = tStr.replace(/\D/g, '').padStart(4, '0');
+      if (digits.length >= 4) {
+        hour = parseInt(digits.slice(-4, -2), 10);
+        min = parseInt(digits.slice(-2), 10);
+      }
+    }
   }
-  const value = normalizeWhitespace(raw);
-  
+  if (hour >= 0 && hour <= 23 && min >= 0 && min <= 59) {
+    d.setHours(hour, min, 0, 0);
+  } else {
+    d.setHours(defaultHour, 0, 0, 0);
+  }
+}
+
+// "YYYY-MM-DD", "DD/MM/YYYY" o Date con soporte de hora (HorEnt / HorProm)
+function parseDmsDateTime(dateRaw, timeRaw = null, defaultHour = 9) {
+  if (!dateRaw) return null;
+  if (dateRaw instanceof Date && !isNaN(dateRaw.getTime())) {
+    const d = new Date(dateRaw);
+    applyDmsTime(d, timeRaw, defaultHour);
+    return d;
+  }
+  const value = normalizeWhitespace(dateRaw);
+  if (!value) return null;
+
+  let d = null;
   // YYYY-MM-DD
   const isoMatch = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (isoMatch) {
-    const [, y, m, d] = isoMatch;
-    return new Date(Number(y), Number(m) - 1, Number(d), hour, 0, 0);
+    const [, y, m, day] = isoMatch;
+    d = new Date(Number(y), Number(m) - 1, Number(day));
+  } else {
+    // DD/MM/YYYY o DD-MM-YYYY (estándar en México y DMS SIA NXT / Prosur)
+    const slashMatch = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
+    if (slashMatch) {
+      const [, p1, p2, yearPart] = slashMatch;
+      const year = yearPart.length === 2 ? 2000 + Number(yearPart) : Number(yearPart);
+      d = new Date(year, Number(p2) - 1, Number(p1));
+    } else {
+      const parsed = new Date(value);
+      if (!isNaN(parsed.getTime())) d = parsed;
+    }
   }
 
-  // M/D/YY o D/M/YY
-  const slashMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (slashMatch) {
-    const [, part1, part2, yearPart] = slashMatch;
-    const year = yearPart.length === 2 ? 2000 + Number(yearPart) : Number(yearPart);
-    return new Date(year, Number(part1) - 1, Number(part2), hour, 0, 0);
-  }
-
-  const parsed = new Date(value);
-  return isNaN(parsed.getTime()) ? null : parsed;
+  if (!d || isNaN(d.getTime())) return null;
+  applyDmsTime(d, timeRaw, defaultHour);
+  return d;
 }
 
 function toTitleCase(value) {
@@ -121,7 +153,7 @@ async function findOrCreateVehicle({ plate, vin, brand, model, customerId, year 
  * 'Mano Obra', 'Refacciones', 'E', 'Trabajo', 'Comentarios', etc.
  */
 function normalizeDmsRow(row) {
-  // Buscar claves tolerando espacios
+  // Buscar claves tolerando espacios y mayúsculas/minúsculas
   const findValue = (prefixes) => {
     for (const key of Object.keys(row)) {
       const cleanKey = key.trim().toUpperCase();
@@ -134,24 +166,30 @@ function normalizeDmsRow(row) {
     return null;
   };
 
-  const rawOrder = findValue(['Orden', 'No_Orden', 'No. Orden', 'Order', 'OT']);
+  const rawOrder = findValue(['Orden', 'No_Orden', 'No. Orden', 'Order', 'OT', 'Num_Orden', 'Num Orden']);
   const orderNumber = normalizeOrderNumber(rawOrder);
   if (!orderNumber) return null;
 
-  const rawRecep = findValue(['Recep', 'Asesor', 'Receptor', 'Advisor']);
-  const rawEntrada = findValue(['Entrada', 'Fecha Entrada', 'Fecha', 'Date']);
-  const rawVin = findValue(['Num.Serie', 'VIN', 'Serie', 'No. Serie']);
+  const rawRecep = findValue(['Recep', 'Asesor', 'Receptor', 'Advisor', 'Recepcionista']);
+  const rawEntrada = findValue(['FecEnt', 'Fec Ent', 'Fec_Ent', 'Fecha Entrada', 'FechaEntrada', 'Entrada', 'Fecha', 'Date', 'F. Entrada']);
+  const rawHorEnt = findValue(['HorEnt', 'Hor Ent', 'Hor_Ent', 'Hora Entrada', 'HoraEntrada', 'Hora', 'Time', 'H. Entrada']);
+  const rawPromesa = findValue(['FecProm', 'Fec Prom', 'Fec_Prom', 'Fecha Promesa', 'FechaPromesa', 'Fec Entrega', 'Fecha Entrega', 'Promesa', 'F. Promesa']);
+  const rawHorProm = findValue(['HorProm', 'Hor Prom', 'Hor_Prom', 'Hora Promesa', 'HoraPromesa', 'Hora Entrega', 'H. Promesa']);
+  const rawVin = findValue(['Serie', 'Num.Serie', 'Num_Serie', 'VIN', 'No. Serie', 'No_Serie']);
   const rawPlacas = findValue(['Placas', 'Placa', 'Plate']);
-  const rawLinea = findValue(['Linea', 'Modelo', 'Model', 'TipoAuto']);
+  const rawLinea = findValue(['TipoVeh', 'Tipo_Veh', 'Tipo Veh', 'Linea', 'Modelo', 'Model', 'TipoAuto', 'Vehiculo']);
   const rawMod = findValue(['Mod.', 'Mod', 'Año', 'Year', 'Modelo Año']);
-  const rawCliente = findValue(['Cliente', 'Customer', 'Nombre Cliente']);
+  const rawCliente = findValue(['Nombre', 'Cliente', 'Customer', 'Nombre Cliente', 'Nombre_Cliente', 'Nombre del Cliente']);
   const rawTrabajo = findValue(['Trabajo', 'Tipo_Servicio', 'Tipo Servicio', 'Servicio']);
-  const rawManoObra = findValue(['Mano Obra', 'MO', 'Labor']);
-  const rawRefacciones = findValue(['Refacciones', 'Parts']);
-  const rawTotal = findValue(['Total', 'Importe Total']);
-  const rawEstatusDms = findValue(['E', 'Estatus', 'Estatus_Actual', 'Status']);
-  const rawTorre = findValue(['Torre', 'Tower']);
+  const rawManoObra = findValue(['TotMO', 'Tot_MO', 'Tot MO', 'Mano Obra', 'MO', 'Labor']);
+  const rawRefacciones = findValue(['TotRef', 'Tot_Ref', 'Tot Ref', 'Total Refacciones', 'Refacciones', 'Parts']);
+  const rawTotal = findValue(['Total', 'Importe Total', 'Tot', 'Total General']);
+  const rawEstatusDms = findValue(['E', 'Estatus', 'Estatus_Actual', 'Status', 'Estado']);
+  const rawTorre = findValue(['Donde', 'Dónde', 'Torre', 'Tower', 'Ubicacion', 'Ubicación']);
   const rawComentarios = findValue(['Comentarios', 'Comentario', 'Observaciones', 'Notes']);
+  const rawSeguro = findValue(['Seg', 'Seguro', 'Aseguradora', 'Insurer']);
+  const rawSiniestro = findValue(['Siniestro', 'Reporte', 'No_Siniestro', 'Num_Siniestro', 'ReportNumber']);
+  const rawProcesoHYP = findValue(['ProcesoHYP', 'Proceso HYP', 'Proceso_HYP', 'HYP']);
 
   const parsedYear = rawMod ? parseInt(String(rawMod).replace(/\D/g, ''), 10) : null;
   const numRefacciones = rawRefacciones ? parseFloat(String(rawRefacciones).replace(/[^\d.-]/g, '')) : 0;
@@ -160,7 +198,8 @@ function normalizeDmsRow(row) {
   return {
     orderNumber,
     recep: normalizeWhitespace(rawRecep) || null,
-    entradaDate: parseEntradaDate(rawEntrada),
+    entradaDate: parseDmsDateTime(rawEntrada, rawHorEnt, 9),
+    promiseDate: parseDmsDateTime(rawPromesa, rawHorProm, 18),
     vin: normalizeWhitespace(rawVin).toUpperCase() || 'SIN-VIN',
     plate: normalizeWhitespace(rawPlacas).toUpperCase() || 'S/P',
     linea: rawLinea,
@@ -170,6 +209,9 @@ function normalizeDmsRow(row) {
     torre: normalizeWhitespace(rawTorre) || null,
     dmsStatus: normalizeWhitespace(rawEstatusDms) || null,
     comentarios: normalizeWhitespace(rawComentarios) || null,
+    procesoHYP: normalizeWhitespace(rawProcesoHYP) || null,
+    insurer: normalizeWhitespace(rawSeguro) || null,
+    reportNumber: normalizeWhitespace(rawSiniestro) || null,
     partsNeeded,
     refaccionesAmount: numRefacciones,
     manoObraAmount: rawManoObra ? parseFloat(String(rawManoObra).replace(/[^\d.-]/g, '')) : 0,
@@ -210,8 +252,9 @@ async function processDmsRows(rawRows, options = {}) {
     const serviceCategory = deriveServiceCategory(row.trabajo);
 
     const notesParts = [
-      row.torre ? `Torre: ${row.torre}` : null,
+      row.torre ? `Ubicación: ${row.torre}` : null,
       row.trabajo ? `Trabajo: ${row.trabajo}` : null,
+      row.procesoHYP ? `Proceso HYP: ${row.procesoHYP}` : null,
       row.comentarios ? `Comentarios: ${row.comentarios}` : null,
     ].filter(Boolean);
     const notes = notesParts.length ? notesParts.join(' | ') : null;
@@ -226,6 +269,9 @@ async function processDmsRows(rawRows, options = {}) {
       notes: notes || undefined,
       ...(agency ? { agency } : {}),
       ...(row.entradaDate ? { receivedAt: row.entradaDate } : {}),
+      ...(row.promiseDate ? { estimatedDeliveryAt: row.promiseDate } : {}),
+      ...(row.insurer ? { insurer: row.insurer } : {}),
+      ...(row.reportNumber ? { reportNumber: row.reportNumber } : {}),
     };
 
     const existing = await prisma.workOrder.findUnique({
