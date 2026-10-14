@@ -405,7 +405,6 @@ const COLUMN_DEFS = {
 
 const DEFAULT_COLUMN_KEYS = {
   SERVICIO: [
-    'agencia',
     'orden',
     'unidad',
     'cliente',
@@ -419,7 +418,6 @@ const DEFAULT_COLUMN_KEYS = {
     'refacciones',
   ],
   HYP: [
-    'agencia',
     'orden',
     'unidad',
     'cliente',
@@ -450,8 +448,8 @@ const DEFAULT_COLUMN_WIDTHS = {
 };
 
 const MIN_COLUMN_WIDTH = 55;
-const WIDTH_STORAGE_PREFIX = 'pitstop.inProgressColumnWidths.v5.';
-const STORAGE_PREFIX = 'pitstop.inProgressColumns.v5.';
+const WIDTH_STORAGE_PREFIX = 'pitstop.inProgressColumnWidths.v6.';
+const STORAGE_PREFIX = 'pitstop.inProgressColumns.v6.';
 
 function loadColumnWidths(orderType) {
   try {
@@ -659,7 +657,7 @@ function ExpandableOrderDetails({ workOrder, onStatusChanged, onSelect }) {
           <div className="flex items-center justify-between border-b border-outline-variant/60 pb-1.5">
             <span className="font-label-caps text-[11px] text-primary font-bold uppercase flex items-center gap-1">
               <span className="material-symbols-outlined text-sm">directions_car</span>
-              Ficha SIA NXT
+              Ficha de la Unidad
             </span>
             <span className="font-data-mono text-[11px] font-bold text-emerald-700">#{workOrder.orderNumber}</span>
           </div>
@@ -1041,7 +1039,7 @@ export default function InProgressList({
         <div>
           <h3 className="font-headline-md text-headline-md text-primary font-bold">Unidades en Proceso</h3>
           <p className="font-body-md text-xs text-on-surface-variant">
-            Haz clic en <span className="font-bold">&gt;</span> para expandir comentarios y detalles estilo SIA NXT
+            Haz clic en <span className="font-bold">&gt;</span> para expandir comentarios y detalles
           </p>
         </div>
         <span className="rounded-full bg-primary/10 px-3 py-1 font-label-caps text-label-caps font-bold text-primary">
