@@ -444,9 +444,15 @@ async function updateTechnician(id, technicianId) {
       : new Date()
     : existing.technicianAssignedAt;
 
+  // Si se está asignando un técnico y la orden no tiene aún tipo de servicio,
+  // asignar 'MANTENIMIENTO' por defecto para que tenga carga de MO y horas computables
+  const serviceCategory = (technicianId !== null && !existing.serviceCategory)
+    ? 'MANTENIMIENTO'
+    : existing.serviceCategory;
+
   return prisma.workOrder.update({
     where: { id },
-    data: { technicianId, technicianAssignedAt },
+    data: { technicianId, technicianAssignedAt, serviceCategory },
     include: INCLUDE_RELATIONS,
   });
 }
@@ -568,6 +574,8 @@ async function capacityFor(team) {
   const categoryHoursRows = await prisma.serviceCategoryHours.findMany();
   const hoursByCategory = Object.fromEntries(categoryHoursRows.map((r) => [r.category, r.hours]));
 
+  const defaultStandardHours = hoursByCategory['MANTENIMIENTO'] ?? 1.5;
+
   let demandHours = 0;
   let carryoverHours = 0;
   let todayDemandHours = 0;
@@ -591,11 +599,10 @@ async function capacityFor(team) {
 
   for (const wo of inProgress) {
     const isCarryover = wo.receivedAt && new Date(wo.receivedAt) < today0;
-    const stdHours = wo.serviceCategory && hoursByCategory[wo.serviceCategory] != null
-      ? hoursByCategory[wo.serviceCategory]
-      : null;
+    const hasCategory = wo.serviceCategory && hoursByCategory[wo.serviceCategory] != null;
+    const stdHours = hasCategory ? hoursByCategory[wo.serviceCategory] : null;
 
-    if (stdHours != null) {
+    if (hasCategory) {
       demandHours += stdHours;
       if (isCarryover) {
         carryoverHours += stdHours;
@@ -604,23 +611,37 @@ async function capacityFor(team) {
         todayDemandHours += stdHours;
         todayDemandCount += 1;
       }
-
-      if (wo.technicianId && techMap.has(wo.technicianId)) {
-        const t = techMap.get(wo.technicianId);
-        t.assignedHours += stdHours;
-        t.ordersCount += 1;
-        if (isCarryover) {
-          t.carryoverHours += stdHours;
-        } else {
-          t.todayHours += stdHours;
-        }
-      }
     } else {
       unclassifiedCount += 1;
       if (isCarryover) {
         carryoverCount += 1;
       } else {
         todayDemandCount += 1;
+      }
+    }
+
+    // Carga asignada por técnico: siempre cuenta las órdenes y horas del técnico
+    if (wo.technicianId && techMap.has(wo.technicianId)) {
+      const t = techMap.get(wo.technicianId);
+      const hoursToAssign = hasCategory ? stdHours : defaultStandardHours;
+
+      t.assignedHours += hoursToAssign;
+      t.ordersCount += 1;
+      if (isCarryover) {
+        t.carryoverHours += hoursToAssign;
+      } else {
+        t.todayHours += hoursToAssign;
+      }
+
+      // Si no tenía categoría clasificada pero ya está en proceso con técnico,
+      // se integra a la demanda total para mantener consistencia de balance
+      if (!hasCategory) {
+        demandHours += hoursToAssign;
+        if (isCarryover) {
+          carryoverHours += hoursToAssign;
+        } else {
+          todayDemandHours += hoursToAssign;
+        }
       }
     }
   }

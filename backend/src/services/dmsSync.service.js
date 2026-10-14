@@ -115,15 +115,16 @@ function resolveBrandAndModel(lineaRaw) {
 
 // Clasificación de categoría de servicio a partir del campo Trabajo / Tipo Servicio
 function deriveServiceCategory(trabajoRaw) {
+  if (!trabajoRaw) return 'MANTENIMIENTO';
   const t = normalizeWhitespace(trabajoRaw).toUpperCase();
   if (t.includes('PREVIA')) return 'PREVIA';
   if (t.includes('DIAGNOSTICO') || t.includes('FALLA') || t.includes('RECLAMO')) {
-    return 'DIAGNOSTICO_FALLA_RECLAMO';
+    return 'FALLA';
   }
   if (t.includes('MANTENIMIENTO') || t.includes('SERVICIO')) {
     return 'MANTENIMIENTO';
   }
-  return null;
+  return 'MANTENIMIENTO';
 }
 
 async function findOrCreateCustomer(rawName) {

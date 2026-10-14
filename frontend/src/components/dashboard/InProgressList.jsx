@@ -72,6 +72,19 @@ function formatDateTimeShort(dateString) {
   });
 }
 
+function formatDateTimeFull(dateString) {
+  if (!dateString) return '—';
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('es-MX', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function promiseBadge(dateString) {
   if (!dateString) return null;
   const delivery = new Date(dateString);
@@ -526,33 +539,40 @@ function ExpandableOrderDetails({ workOrder, onStatusChanged }) {
 
           <div className="grid grid-cols-2 gap-2 text-on-surface pt-1">
             <div>
+              <span className="text-on-surface-variant block text-[10px] uppercase font-semibold">Marca:</span>
+              <span className="font-bold text-[11px] text-primary">{workOrder.vehicle?.brand || '—'}</span>
+            </div>
+            <div>
               <span className="text-on-surface-variant block text-[10px] uppercase font-semibold">Agencia:</span>
               <span className="font-bold text-[11px] text-primary flex items-center gap-1">
                 <span className="material-symbols-outlined text-xs text-blue-600">store</span>
                 {workOrder.agency || workOrder.tower || 'Tuxtla Poniente'}
               </span>
             </div>
-            <div>
-              <span className="text-on-surface-variant block text-[10px] uppercase font-semibold">Marca:</span>
-              <span className="font-bold text-[11px] text-primary">{workOrder.vehicle?.brand || '—'}</span>
+            <div className="col-span-2 bg-slate-50 border border-outline-variant/60 rounded-lg px-2.5 py-1.5">
+              <span className="text-on-surface-variant block text-[10px] uppercase font-semibold">Fecha y Hora de Entrada:</span>
+              <span className="font-data-mono font-bold text-[11px] text-primary flex items-center gap-1.5 mt-0.5">
+                <span className="material-symbols-outlined text-xs text-emerald-600">login</span>
+                {formatDateTimeFull(workOrder.receivedAt)}
+              </span>
             </div>
             <div>
               <span className="text-on-surface-variant block text-[10px] uppercase font-semibold">VIN:</span>
-              <span className="font-data-mono font-medium text-[11px]">{workOrder.vehicle?.vin || '—'}</span>
+              <span className="font-data-mono font-medium text-[11px] truncate block" title={workOrder.vehicle?.vin}>{workOrder.vehicle?.vin || '—'}</span>
             </div>
             <div>
               <span className="text-on-surface-variant block text-[10px] uppercase font-semibold">Color:</span>
               <span className="font-medium text-[11px]">{workOrder.vehicle?.color || '—'}</span>
             </div>
             <div>
-              <span className="text-on-surface-variant block text-[10px] uppercase font-semibold">Kms:</span>
+              <span className="text-on-surface-variant block text-[10px] uppercase font-semibold">Asesor:</span>
+              <span className="font-medium text-[11px] truncate block">{workOrder.advisor?.name || workOrder.advisorCode || '—'}</span>
+            </div>
+            <div>
+              <span className="text-on-surface-variant block text-[10px] uppercase font-semibold">KM:</span>
               <span className="font-data-mono font-medium text-[11px]">
                 {workOrder.vehicle?.mileage ? `${workOrder.vehicle.mileage.toLocaleString()} km` : workOrder.kms || '—'}
               </span>
-            </div>
-            <div>
-              <span className="text-on-surface-variant block text-[10px] uppercase font-semibold">Asesor:</span>
-              <span className="font-medium text-[11px]">{workOrder.advisor?.name || workOrder.advisorCode || '—'}</span>
             </div>
           </div>
 
