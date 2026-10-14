@@ -85,16 +85,17 @@ const NO_TIME_COLUMN = { key: 'none', label: 'Sin hora definida' };
 const WORKSHOP_DEFAULT_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
 
 // Matriz técnico × hora de entrega para el día seleccionado: filas = técnicos (con "Sin
-// asignar" al final), columnas = horas completas de jornada (08:00 a 18:00 + citas) (+ "Sin hora definida").
-function buildMatrix(workOrders, selectedDate) {
+// asignar" al final), columnas = horas completas de jornada o solo horas con citas (+ "Sin hora definida").
+function buildMatrix(workOrders, selectedDate, onlyActiveHours = false) {
   const { withHour, noTime } = unitsForSelectedDate(workOrders, selectedDate);
 
   const orderHours = withHour.map((wo) => new Date(wo.estimatedDeliveryAt).getHours());
-  const combined = new Set([...WORKSHOP_DEFAULT_HOURS, ...orderHours]);
-  const hoursList = [...combined].sort((a, b) => a - b);
+  const hoursList = onlyActiveHours && orderHours.length > 0
+    ? [...new Set(orderHours)].sort((a, b) => a - b)
+    : [...new Set([...WORKSHOP_DEFAULT_HOURS, ...orderHours])].sort((a, b) => a - b);
 
   const columns = hoursList.map((h) => ({ key: `hour-${h}`, hour: h, label: formatHour(h) }));
-  if (noTime.length) columns.push(NO_TIME_COLUMN);
+  if (noTime.length) columns.push({ ...NO_TIME_COLUMN, count: noTime.length });
 
   const technicianNames = new Set();
   for (const wo of [...withHour, ...noTime]) {
@@ -143,35 +144,43 @@ function upcomingDaysWithOrders(workOrders, selectedDate) {
 function VehicleCard({ workOrder, standardHours, onSelect }) {
   const { vehicle } = workOrder;
   const progress = standardHours ? computeWorkProgress(workOrder, standardHours) : null;
+  const timeStr = workOrder.estimatedDeliveryAt
+    ? new Date(workOrder.estimatedDeliveryAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+    : null;
 
   return (
-    <div className="relative w-full">
-      <button
-        type="button"
-        onClick={() => onSelect?.(workOrder)}
-        title={`Clic para ver detalle y flujo de etapas de la orden #${workOrder.orderNumber}`}
-        className={`flex w-full flex-col gap-0.5 rounded-lg border border-outline-variant bg-white px-2.5 py-1.5 text-left transition-all hover:border-primary hover:shadow-xs hover:scale-[1.02] cursor-pointer shadow-2xs ${
-          progress ? `border-l-4 ${PROGRESS_STRIPE_CLASS[progress.level]}` : ''
-        }`}
-      >
-        <span className="truncate font-body-md text-xs font-bold text-primary">
+    <button
+      type="button"
+      onClick={() => onSelect?.(workOrder)}
+      title={`Orden #${workOrder.orderNumber} • ${vehicle?.brand || ''} ${vehicle?.model || ''} • Clic para ver etapas`}
+      className={`group flex w-full flex-col rounded-md border border-outline-variant/80 bg-white px-2 py-1 text-left transition-all hover:border-primary hover:shadow-xs hover:scale-[1.01] cursor-pointer shadow-2xs ${
+        progress ? `border-l-3 ${PROGRESS_STRIPE_CLASS[progress.level]}` : ''
+      }`}
+    >
+      <div className="flex items-center justify-between gap-1 w-full">
+        <span className="font-data-mono text-[11px] font-bold text-primary truncate">
           #{workOrder.orderNumber}
         </span>
-        <span className="truncate font-body-sm text-[11px] font-medium text-on-surface-variant">
-          {vehicle?.brand} {vehicle?.model}
-        </span>
-      </button>
-    </div>
+        {timeStr && (
+          <span className="font-data-mono text-[9px] font-semibold text-on-surface-variant/70 shrink-0">
+            {timeStr}
+          </span>
+        )}
+      </div>
+      <span className="truncate font-body-sm text-[10px] text-on-surface-variant leading-tight">
+        {vehicle?.model || vehicle?.brand || 'Sin modelo'}
+      </span>
+    </button>
   );
 }
 
 export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, opStats }) {
-  const [collapsed, setCollapsed] = useState(false);
   const [selectedDate, setSelectedDate] = useState(startOfToday);
+  const [onlyActiveHours, setOnlyActiveHours] = useState(false);
 
   const { rows, columns, cells } = useMemo(
-    () => buildMatrix(workOrders, selectedDate),
-    [workOrders, selectedDate]
+    () => buildMatrix(workOrders, selectedDate, onlyActiveHours),
+    [workOrders, selectedDate, onlyActiveHours]
   );
 
   const otherDays = useMemo(() => upcomingDaysWithOrders(workOrders, selectedDate), [workOrders, selectedDate]);
@@ -185,13 +194,13 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
     const { withHour, noTime } = unitsForSelectedDate(workOrders, selectedDate);
     for (const wo of [...withHour, ...noTime]) {
       const name = wo.technician?.name || 'Sin asignar';
-      const std = wo.serviceCategory && standardHours ? standardHours[wo.serviceCategory] : 1.0;
+      const std = wo.serviceCategory && standardHours ? standardHours[wo.serviceCategory] : 1.5;
       map.set(name, (map.get(name) || 0) + std);
     }
     return map;
   }, [workOrders, selectedDate, standardHours]);
 
-  // Indicadores operativos dinámicos para la barra del calendario
+  // Indicadores operativos dinámicos para la barra
   const computedOpStats = useMemo(() => {
     const today0 = startOfToday();
     const today1 = addDays(today0, 1);
@@ -206,270 +215,252 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
     const terminados = opStats?.terminados ?? workOrders.filter((wo) => ['TERMINADO', 'ENTREGADO'].includes(wo.status)).length;
     const porEntregar = opStats?.porEntregar ?? workOrders.filter((wo) => wo.status === 'TERMINADO' || (wo.status !== 'ENTREGADO' && !['RECIBIDO'].includes(wo.status))).length;
 
-    // Rezagados: Unidades recibidas antes de hoy que siguen en proceso
     const rezagados = opStats?.rezagados ?? workOrders.filter((wo) => {
       if (['TERMINADO', 'ENTREGADO'].includes(wo.status)) return false;
       if (!wo.receivedAt) return false;
       return new Date(wo.receivedAt) < today0;
     }).length;
 
-    return {
-      totalHoy,
-      terminados,
-      porEntregar,
-      rezagados,
-    };
+    return { totalHoy, terminados, porEntregar, rezagados };
   }, [workOrders, opStats]);
 
   return (
-    <section className="mb-6 w-full rounded-2xl border border-outline-variant bg-surface-container-lowest card-elevation shadow-xs">
-      <button
-        type="button"
-        onClick={() => setCollapsed((v) => !v)}
-        className="flex w-full items-center justify-between px-card-padding py-3.5 cursor-pointer"
-      >
-        <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-primary" data-icon="dashboard">
-            dashboard
-          </span>
-          <h3 className="font-headline-md text-base font-black text-primary">Horas Promesa de Entrega (Magnetoplano)</h3>
-        </div>
-        <span className="material-symbols-outlined text-on-surface-variant" data-icon={collapsed ? 'expand_more' : 'expand_less'}>
-          {collapsed ? 'expand_more' : 'expand_less'}
-        </span>
-      </button>
-
-      {!collapsed && (
-        <div className="border-t border-outline-variant px-card-padding py-3.5">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            {/* Controles de fecha / calendario */}
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedDate((d) => addDays(d, -1))}
-                title="Día anterior"
-                className="material-symbols-outlined rounded-full p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary cursor-pointer"
-                data-icon="chevron_left"
-              >
-                chevron_left
-              </button>
-
-              <div className="flex items-center gap-2">
-                <span className="min-w-[5.5rem] text-center font-headline-md text-sm font-bold text-primary">
-                  {formatDayLabel(selectedDate)}
-                </span>
-                <input
-                  type="date"
-                  value={toDateInputValue(selectedDate)}
-                  onChange={(e) => e.target.value && setSelectedDate(fromDateInputValue(e.target.value))}
-                  className="rounded-lg border border-outline-variant bg-white px-2 py-1 font-data-mono text-xs text-primary cursor-pointer"
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setSelectedDate((d) => addDays(d, 1))}
-                title="Día siguiente"
-                className="material-symbols-outlined rounded-full p-1 text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-primary cursor-pointer"
-                data-icon="chevron_right"
-              >
-                chevron_right
-              </button>
-
-              {!isToday && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedDate(startOfToday())}
-                  className="rounded-full border border-outline-variant px-2.5 py-0.5 font-label-caps text-[11px] font-bold text-on-surface-variant transition-colors hover:border-primary hover:text-primary cursor-pointer"
-                >
-                  Ir a hoy
-                </button>
-              )}
-            </div>
-
-            {/* 4 Indicadores Operativos a un lado del calendario: Total hoy, Terminados, Por entregar, Rezagados */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* 1. Total Hoy */}
-              <div className="flex items-center gap-1.5 rounded-lg border border-outline-variant bg-white px-2.5 py-1 shadow-2xs">
-                <span className="material-symbols-outlined text-primary text-sm">directions_car</span>
-                <span className="font-label-caps text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">TOTAL HOY:</span>
-                <span className="font-headline-md text-xs font-black text-primary">{computedOpStats.totalHoy}</span>
-              </div>
-
-              {/* 2. Terminados */}
-              <div className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/60 px-2.5 py-1 shadow-2xs">
-                <span className="material-symbols-outlined text-emerald-600 text-sm">check_circle</span>
-                <span className="font-label-caps text-[10px] text-emerald-800 font-bold uppercase tracking-wider">TERMINADOS:</span>
-                <span className="font-headline-md text-xs font-black text-emerald-700">{computedOpStats.terminados}</span>
-              </div>
-
-              {/* 3. Por Entregar */}
-              <div className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/60 px-2.5 py-1 shadow-2xs">
-                <span className="material-symbols-outlined text-amber-600 text-sm">pending_actions</span>
-                <span className="font-label-caps text-[10px] text-amber-800 font-bold uppercase tracking-wider">POR ENTREGAR:</span>
-                <span className="font-headline-md text-xs font-black text-amber-700">{computedOpStats.porEntregar}</span>
-              </div>
-
-              {/* 4. Rezagados */}
-              <div className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50/70 px-2.5 py-1 shadow-2xs ring-1 ring-rose-300">
-                <span className="material-symbols-outlined text-rose-600 text-sm">alarm</span>
-                <span className="font-label-caps text-[10px] text-rose-900 font-bold uppercase tracking-wider">REZAGADOS:</span>
-                <span className="font-headline-md text-xs font-black text-rose-800">{computedOpStats.rezagados}</span>
-              </div>
-            </div>
-
-            <span className="font-label-caps text-[11px] text-on-surface-variant font-bold">
-              {totalCount} unidad(es)
+    <section className="w-full rounded-2xl border border-outline-variant bg-surface-container-lowest shadow-2xs">
+      {/* Barra de Controles y KPIs compacta */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-outline-variant/70 px-4 py-2.5">
+        {/* Controles de fecha / calendario */}
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-0.5 rounded-lg border border-outline-variant bg-white p-0.5 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setSelectedDate((d) => addDays(d, -1))}
+              title="Día anterior"
+              className="p-1 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm">chevron_left</span>
+            </button>
+            <span className="min-w-[4rem] text-center font-headline-md text-xs font-bold text-primary px-1">
+              {formatDayLabel(selectedDate)}
             </span>
+            <input
+              type="date"
+              value={toDateInputValue(selectedDate)}
+              onChange={(e) => e.target.value && setSelectedDate(fromDateInputValue(e.target.value))}
+              className="rounded border border-outline-variant bg-white px-1.5 py-0.5 font-data-mono text-[11px] text-primary cursor-pointer"
+            />
+            <button
+              type="button"
+              onClick={() => setSelectedDate((d) => addDays(d, 1))}
+              title="Día siguiente"
+              className="p-1 text-on-surface-variant hover:text-primary hover:bg-surface-container rounded transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm">chevron_right</span>
+            </button>
           </div>
 
-          {/* Leyenda y referencia rápida */}
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/60 pb-2">
-            {standardHours && (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="font-label-caps text-[11px] text-on-surface-variant font-bold">Semáforo de avance:</span>
-                {[
-                  { level: 'OK', label: 'A tiempo' },
-                  { level: 'WARN', label: 'Por vencer' },
-                  { level: 'LATE', label: 'Excedido' },
-                  { level: 'UNKNOWN', label: 'Sin dato' },
-                ].map((l) => (
-                  <span key={l.level} className="flex items-center gap-1.5 font-label-caps text-[10px] text-on-surface-variant">
-                    <span className={`h-2 w-2 rounded-full ${PROGRESS_DOT_CLASS[l.level]}`} />
-                    {l.label}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="flex items-center gap-3 text-[10px] font-label-caps text-on-surface-variant">
-              <span className="flex items-center gap-1 text-emerald-800 font-bold">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                Slot Libre / Disponible
-              </span>
-            </div>
-          </div>
-
-          {otherDays.length > 0 && (
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              <span className="font-label-caps text-[11px] text-on-surface-variant">Otros días:</span>
-              {otherDays.map((d) => (
-                <button
-                  key={d.key}
-                  type="button"
-                  onClick={() => setSelectedDate(d.date)}
-                  className="rounded-full border border-outline-variant px-3 py-1 font-label-caps text-[11px] text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
-                >
-                  {formatDayLabel(d.date)} ({d.count})
-                </button>
-              ))}
-            </div>
+          {!isToday && (
+            <button
+              type="button"
+              onClick={() => setSelectedDate(startOfToday())}
+              className="rounded-lg border border-outline-variant bg-white px-2 py-1 font-label-caps text-[10px] font-bold text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+            >
+              Hoy
+            </button>
           )}
 
-          {rows.length === 0 ? (
-            <p className="py-4 text-center font-body-md text-on-surface-variant">
-              No hay unidades para {formatDayLabel(selectedDate).toLowerCase()}.
-            </p>
-          ) : (
-            <div className="overflow-x-auto pb-2">
-              <table className="w-full min-w-max border-collapse text-left">
-                <thead>
-                  <tr>
-                    <th className="sticky left-0 z-20 bg-surface-container-lowest px-3 py-2 font-label-caps text-[11px] uppercase tracking-wider text-on-surface-variant min-w-[12rem]">
-                      Técnico & Ocupación
-                    </th>
-                    {columns.map((col) => (
+          {/* Toggle de Horas con Citas vs Jornada Completa */}
+          <button
+            type="button"
+            onClick={() => setOnlyActiveHours((v) => !v)}
+            title={onlyActiveHours ? 'Ver toda la jornada (08:00 a 18:00)' : 'Ver solo columnas con entregas programadas'}
+            className={`flex items-center gap-1 rounded-lg border px-2 py-1 font-label-caps text-[10px] font-bold transition-all cursor-pointer ${
+              onlyActiveHours
+                ? 'border-primary bg-primary text-white shadow-2xs'
+                : 'border-outline-variant bg-white text-on-surface-variant hover:border-primary hover:text-primary'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xs">
+              {onlyActiveHours ? 'view_column' : 'filter_list'}
+            </span>
+            {onlyActiveHours ? 'Solo citas' : 'Jornada completa'}
+          </button>
+        </div>
+
+        {/* 4 Indicadores Operativos en pills compactos */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex items-center gap-1 rounded-md border border-outline-variant bg-white px-2 py-0.5 shadow-2xs">
+            <span className="font-label-caps text-[9px] text-on-surface-variant font-bold">TOTAL:</span>
+            <span className="font-data-mono text-xs font-black text-primary">{computedOpStats.totalHoy}</span>
+          </div>
+          <div className="flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50/60 px-2 py-0.5 shadow-2xs">
+            <span className="font-label-caps text-[9px] text-emerald-800 font-bold">LISTAS:</span>
+            <span className="font-data-mono text-xs font-black text-emerald-700">{computedOpStats.terminados}</span>
+          </div>
+          <div className="flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50/60 px-2 py-0.5 shadow-2xs">
+            <span className="font-label-caps text-[9px] text-amber-800 font-bold">POR ENTREGAR:</span>
+            <span className="font-data-mono text-xs font-black text-amber-700">{computedOpStats.porEntregar}</span>
+          </div>
+          <div className="flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50/70 px-2 py-0.5 shadow-2xs ring-1 ring-rose-200">
+            <span className="font-label-caps text-[9px] text-rose-900 font-bold">REZAGADOS:</span>
+            <span className="font-data-mono text-xs font-black text-rose-800">{computedOpStats.rezagados}</span>
+          </div>
+          <span className="font-label-caps text-[10px] text-on-surface-variant/80 font-bold pl-1">
+            ({totalCount} en vista)
+          </span>
+        </div>
+      </div>
+
+      {/* Sub-barra: Semáforo y Otros Días */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant/40 bg-surface-container/20 px-4 py-1.5 text-[10px] font-label-caps text-on-surface-variant">
+        {standardHours && (
+          <div className="flex items-center gap-2.5">
+            <span className="font-bold text-on-surface-variant">Semáforo:</span>
+            {[
+              { level: 'OK', label: 'A tiempo' },
+              { level: 'WARN', label: 'Por vencer' },
+              { level: 'LATE', label: 'Excedido' },
+            ].map((l) => (
+              <span key={l.level} className="inline-flex items-center gap-1">
+                <span className={`h-1.5 w-1.5 rounded-full ${PROGRESS_DOT_CLASS[l.level]}`} />
+                {l.label}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {otherDays.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto">
+            <span className="font-bold">Otros días:</span>
+            {otherDays.slice(0, 5).map((d) => (
+              <button
+                key={d.key}
+                type="button"
+                onClick={() => setSelectedDate(d.date)}
+                className="rounded border border-outline-variant bg-white px-1.5 py-0.2 font-label-caps text-[9px] text-on-surface-variant hover:border-primary hover:text-primary transition-colors cursor-pointer"
+              >
+                {formatDayLabel(d.date)} ({d.count})
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Matriz de técnicos x hora compacta */}
+      <div className="p-2">
+        {rows.length === 0 ? (
+          <p className="py-8 text-center font-body-md text-xs text-on-surface-variant">
+            No hay unidades programadas para {formatDayLabel(selectedDate).toLowerCase()}.
+          </p>
+        ) : (
+          <div className="overflow-x-auto pb-1">
+            <table className="w-full min-w-max border-collapse text-left">
+              <thead>
+                <tr className="border-b border-outline-variant/70">
+                  <th className="sticky left-0 z-20 bg-surface-container-lowest px-2.5 py-1.5 font-label-caps text-[10px] font-bold uppercase tracking-wider text-on-surface-variant min-w-[9.5rem] border-r border-outline-variant/60 shadow-2xs">
+                    Técnico
+                  </th>
+                  {columns.map((col) => {
+                    const isNoTime = col.key === 'none';
+                    return (
                       <th
                         key={col.key}
-                        className="min-w-[11.5rem] whitespace-nowrap rounded-t bg-primary/10 px-3 py-1.5 font-label-caps text-[11px] uppercase tracking-wider text-primary text-center"
+                        className={`min-w-[7.5rem] max-w-[9.5rem] whitespace-nowrap px-2 py-1 font-label-caps text-[10px] font-bold uppercase tracking-wider text-center border-r border-outline-variant/30 ${
+                          isNoTime
+                            ? 'bg-amber-50 text-amber-900 border-amber-200'
+                            : 'bg-primary/5 text-primary'
+                        }`}
                       >
-                        {col.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((technicianName) => {
-                    const assignedHrs = techHoursMap.get(technicianName) || 0;
-                    const shiftHours = 8.0;
-                    const isUnassigned = technicianName === 'Sin asignar';
-                    const techPct = Math.round((assignedHrs / shiftHours) * 100);
-                    const isOverloaded = assignedHrs > shiftHours;
-
-                    return (
-                      <tr key={technicianName} className="border-t border-outline-variant hover:bg-surface-container/20">
-                        {/* Cabecera de fila con indicador de carga y semáforo individual */}
-                        <td className="sticky left-0 z-10 bg-surface-container-lowest px-3 py-3 align-top">
-                          <div className="flex flex-col gap-1">
-                            <span className="font-body-md text-sm font-bold text-primary">
-                              {technicianName}
+                        <div className="flex items-center justify-center gap-1">
+                          <span>{col.label}</span>
+                          {isNoTime && col.count > 0 && (
+                            <span className="rounded-full bg-amber-200/80 px-1 text-[9px] font-black text-amber-900">
+                              {col.count}
                             </span>
-                            {!isUnassigned && (
-                              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                                <span
-                                  className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold font-data-mono border ${
-                                    isOverloaded
-                                      ? 'bg-rose-100 text-rose-800 border-rose-300'
-                                      : assignedHrs >= 6.5
-                                      ? 'bg-amber-100 text-amber-800 border-amber-300'
-                                      : 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                                  }`}
-                                >
-                                  {assignedHrs.toFixed(1)}h / {shiftHours.toFixed(1)}h ({techPct}%)
-                                </span>
-                                <span className={`text-[9px] font-bold ${isOverloaded ? 'text-rose-700' : 'text-emerald-700'}`}>
-                                  {isOverloaded ? '🚨 Saturado' : '🟢 Libre'}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Columnas de horas / slots */}
-                        {columns.map((col, colIndex) => {
-                          const items = cells.get(`${technicianName}__${col.key}`) || [];
-                          const align =
-                            colIndex === 0 ? 'left' : colIndex === columns.length - 1 ? 'right' : 'center';
-
-                          return (
-                            <td key={col.key} className="px-2 py-2 align-top">
-                              {items.length > 0 ? (
-                                <div className="flex flex-col gap-2">
-                                  {items.map((wo) => (
-                                    <VehicleCard
-                                      key={wo.id}
-                                      workOrder={wo}
-                                      standardHours={standardHours}
-                                      onSelect={onSelect}
-                                    />
-                                  ))}
-                                </div>
-                              ) : col.key !== 'none' && !isUnassigned ? (
-                                /* Slot Vacío / Disponible para programar */
-                                <div
-                                  title={`Horario ${col.label} disponible para ${technicianName}`}
-                                  className="flex h-12 w-full items-center justify-center rounded-lg border border-dashed border-emerald-300/50 bg-emerald-50/20 px-2 text-center text-[10px] font-semibold text-emerald-800/70 hover:bg-emerald-50/70 hover:border-emerald-400 transition-colors"
-                                >
-                                  <span className="flex items-center gap-1 font-label-caps">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                    Libre ({col.label})
-                                  </span>
-                                </div>
-                              ) : (
-                                <div className="h-10 w-full" />
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
+                          )}
+                        </div>
+                      </th>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/40">
+                {rows.map((technicianName) => {
+                  const assignedHrs = techHoursMap.get(technicianName) || 0;
+                  const shiftHours = 8.0;
+                  const isUnassigned = technicianName === 'Sin asignar';
+                  const techPct = Math.round((assignedHrs / shiftHours) * 100);
+                  const isOverloaded = assignedHrs > shiftHours;
+
+                  return (
+                    <tr key={technicianName} className="hover:bg-surface-container/20 transition-colors">
+                      {/* Cabecera de fila sticky */}
+                      <td className="sticky left-0 z-10 bg-surface-container-lowest px-2.5 py-1.5 align-top border-r border-outline-variant/60">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-body-md text-xs font-bold text-primary truncate max-w-[9rem]" title={technicianName}>
+                            {technicianName}
+                          </span>
+                          {!isUnassigned && (
+                            <div className="flex items-center gap-1">
+                              <span
+                                className={`rounded px-1 py-0.2 text-[9px] font-bold font-data-mono border ${
+                                  isOverloaded
+                                    ? 'bg-rose-100 text-rose-800 border-rose-300'
+                                    : assignedHrs >= 6.5
+                                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                    : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                }`}
+                              >
+                                {assignedHrs.toFixed(1)}h ({techPct}%)
+                              </span>
+                              {isOverloaded && (
+                                <span className="text-[9px] text-rose-700 font-bold" title="Saturado">🚨</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Columnas de horas / slots */}
+                      {columns.map((col) => {
+                        const items = cells.get(`${technicianName}__${col.key}`) || [];
+
+                        return (
+                          <td key={col.key} className="px-1.5 py-1 align-top border-r border-outline-variant/30 min-w-[7.5rem] max-w-[9.5rem]">
+                            {items.length > 0 ? (
+                              <div className="flex flex-col gap-1">
+                                {items.map((wo) => (
+                                  <VehicleCard
+                                    key={wo.id}
+                                    workOrder={wo}
+                                    standardHours={standardHours}
+                                    onSelect={onSelect}
+                                  />
+                                ))}
+                              </div>
+                            ) : col.key !== 'none' && !isUnassigned ? (
+                              /* Slot Vacío / Disponible Compacto */
+                              <div
+                                title={`Horario ${col.label} disponible para ${technicianName}`}
+                                className="flex h-7 w-full items-center justify-center rounded border border-dashed border-emerald-300/40 bg-emerald-50/15 px-1 text-center transition-colors hover:bg-emerald-50/50 hover:border-emerald-400"
+                              >
+                                <span className="font-label-caps text-[9px] text-emerald-800/60 font-medium">
+                                  Libre
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="h-7 w-full" />
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </section>
   );
 }
