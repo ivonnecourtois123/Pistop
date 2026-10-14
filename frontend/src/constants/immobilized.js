@@ -30,29 +30,64 @@ export const INSURANCE_STAGE_LABEL = Object.fromEntries(INSURANCE_STAGES.map((s)
 // Catálogo de Marcas del Grupo
 export const GROUP_BRANDS = ['NISSAN', 'CHANGAN', 'RENAULT'];
 
-// Catálogo completo de agencias / sucursales
+// Catálogo estructurado de agencias por marca (proporcionado oficialmente por el Grupo)
+export const AGENCIES_BY_BRAND = {
+  NISSAN: [
+    { id: 'San Cristóbal', name: 'San Cristóbal' },
+    { id: 'Comitán', name: 'Comitán' },
+    { id: 'Ocosingo', name: 'Ocosingo' },
+    { id: 'Palenque', name: 'Palenque' },
+    { id: 'Tenosique', name: 'Tenosique' },
+    { id: 'Tuxtla Ote', name: 'Tuxtla Ote' },
+    { id: 'Tuxtla Poniente', name: 'Tuxtla Poniente' },
+    { id: 'Tapachula (Nissan)', name: 'Tapachula' },
+  ],
+  RENAULT: [
+    { id: 'Renault Tuxtla', name: 'Tuxtla' },
+    { id: 'Renault Tapachula', name: 'Tapachula' },
+    { id: 'Renault Itsmo', name: 'Itsmo' },
+  ],
+  CHANGAN: [
+    { id: 'Changan Tuxtla', name: 'Tuxtla' },
+    { id: 'Changan Tapachula', name: 'Tapachula' },
+  ],
+};
+
+// Lista plana para selectores estándar
 export const DEFAULT_AGENCIES = [
-  'Tuxtla Poniente',
-  'Tuxtla Oriente',
-  'Tapachula',
+  // Nissan
   'San Cristóbal',
   'Comitán',
-  'Palenque',
   'Ocosingo',
+  'Palenque',
   'Tenosique',
+  'Tuxtla Ote',
+  'Tuxtla Poniente',
+  'Tapachula (Nissan)',
+  // Renault
+  'Renault Tuxtla',
+  'Renault Tapachula',
+  'Renault Itsmo',
+  // Changan
+  'Changan Tuxtla',
+  'Changan Tapachula',
 ];
 
-// Mapeo automático de códigos abreviados o letras a nombres reales de sucursal
+// Mapeo automático de códigos abreviados o variantes de nombres a nombres estándar
 export const AGENCY_CODE_MAP = {
+  // Nissan
   'TUX_PTE': 'Tuxtla Poniente',
-  'TUX_OTE': 'Tuxtla Oriente',
+  'TUX_OTE': 'Tuxtla Ote',
   'TUXTLA_PTE': 'Tuxtla Poniente',
-  'TUXTLA_OTE': 'Tuxtla Oriente',
+  'TUXTLA_OTE': 'Tuxtla Ote',
   'TUXTLA PTE': 'Tuxtla Poniente',
-  'TUXTLA OTE': 'Tuxtla Oriente',
-  'TUXTLA': 'Tuxtla Poniente',
-  'TAP': 'Tapachula',
-  'TAPACHULA': 'Tapachula',
+  'TUXTLA OTE': 'Tuxtla Ote',
+  'TUXTLA ORIENTE': 'Tuxtla Ote',
+  'TUXTLA PONIENTE': 'Tuxtla Poniente',
+  'TAP': 'Tapachula (Nissan)',
+  'TAPACHULA': 'Tapachula (Nissan)',
+  'TAPACHULA (NISSAN)': 'Tapachula (Nissan)',
+  'NISSAN TAPACHULA': 'Tapachula (Nissan)',
   'SCL': 'San Cristóbal',
   'SAN CRISTOBAL': 'San Cristóbal',
   'SAN CRISTÓBAL': 'San Cristóbal',
@@ -65,18 +100,61 @@ export const AGENCY_CODE_MAP = {
   'OCOSINGO': 'Ocosingo',
   'TEN': 'Tenosique',
   'TENOSIQUE': 'Tenosique',
+
+  // Renault
+  'REN_TUX': 'Renault Tuxtla',
+  'RENAULT TUXTLA': 'Renault Tuxtla',
+  'TUXTLA (RENAULT)': 'Renault Tuxtla',
+  'REN_TAP': 'Renault Tapachula',
+  'RENAULT TAPACHULA': 'Renault Tapachula',
+  'TAPACHULA (RENAULT)': 'Renault Tapachula',
+  'REN_ITSMO': 'Renault Itsmo',
+  'RENAULT ITSMO': 'Renault Itsmo',
+  'ITSMO (RENAULT)': 'Renault Itsmo',
+  'ITSMO': 'Renault Itsmo',
+  'ISTMO': 'Renault Itsmo',
+  'RENAULT ISTMO': 'Renault Itsmo',
+
+  // Changan
+  'CHN_TUX': 'Changan Tuxtla',
+  'CHANGAN TUXTLA': 'Changan Tuxtla',
+  'TUXTLA (CHANGAN)': 'Changan Tuxtla',
+  'CHN_TAP': 'Changan Tapachula',
+  'CHANGAN TAPACHULA': 'Changan Tapachula',
+  'TAPACHULA (CHANGAN)': 'Changan Tapachula',
 };
 
-// Mapeo de Agencias a Marcas del Grupo (base inicial, se completará con el catálogo exacto)
+// Mapeo exhaustivo de Agencias a Marcas del Grupo
 export const AGENCY_BRAND_MAP = {
+  // Nissan
   'San Cristóbal': 'NISSAN',
-  'Tuxtla Poniente': 'NISSAN',
-  'Tuxtla Oriente': 'NISSAN',
-  'Tapachula': 'NISSAN',
   'Comitán': 'NISSAN',
-  'Palenque': 'NISSAN',
   'Ocosingo': 'NISSAN',
+  'Palenque': 'NISSAN',
   'Tenosique': 'NISSAN',
+  'Tuxtla Ote': 'NISSAN',
+  'Tuxtla Oriente': 'NISSAN',
+  'Tuxtla Poniente': 'NISSAN',
+  'Tapachula': 'NISSAN',
+  'Tapachula (Nissan)': 'NISSAN',
+  'Nissan Tapachula': 'NISSAN',
+
+  // Renault
+  'Renault Tuxtla': 'RENAULT',
+  'Tuxtla (Renault)': 'RENAULT',
+  'Renault Tapachula': 'RENAULT',
+  'Tapachula (Renault)': 'RENAULT',
+  'Renault Itsmo': 'RENAULT',
+  'Itsmo (Renault)': 'RENAULT',
+  'Itsmo': 'RENAULT',
+  'Istmo': 'RENAULT',
+  'Renault Istmo': 'RENAULT',
+
+  // Changan
+  'Changan Tuxtla': 'CHANGAN',
+  'Tuxtla (Changan)': 'CHANGAN',
+  'Changan Tapachula': 'CHANGAN',
+  'Tapachula (Changan)': 'CHANGAN',
 };
 
 export function getFullAgencyName(rawCodeOrName) {
@@ -87,8 +165,38 @@ export function getFullAgencyName(rawCodeOrName) {
 
 export function getAgencyBrand(rawCodeOrName) {
   if (!rawCodeOrName) return null;
-  const fullName = getFullAgencyName(rawCodeOrName);
-  return AGENCY_BRAND_MAP[fullName] || null;
+  const str = String(rawCodeOrName).trim();
+  const upper = str.toUpperCase();
+
+  // 1. Mapeo directo o por alias normalizado
+  const fullName = getFullAgencyName(str);
+  if (AGENCY_BRAND_MAP[fullName]) return AGENCY_BRAND_MAP[fullName];
+  if (AGENCY_BRAND_MAP[str]) return AGENCY_BRAND_MAP[str];
+  if (AGENCY_BRAND_MAP[upper]) return AGENCY_BRAND_MAP[upper];
+
+  // 2. Detección por palabras clave en el texto
+  if (upper.includes('RENAULT') || upper.includes('ITSMO') || upper.includes('ISTMO')) return 'RENAULT';
+  if (upper.includes('CHANGAN')) return 'CHANGAN';
+  if (upper.includes('NISSAN')) return 'NISSAN';
+
+  // 3. Plazas exclusivas de Nissan
+  if (
+    upper.includes('CRISTOBAL') ||
+    upper.includes('CRISTÓBAL') ||
+    upper.includes('COMITAN') ||
+    upper.includes('COMITÁN') ||
+    upper.includes('OCOSINGO') ||
+    upper.includes('PALENQUE') ||
+    upper.includes('TENOSIQUE') ||
+    upper.includes('PONIENTE') ||
+    upper.includes('PTE') ||
+    upper.includes('ORIENTE') ||
+    upper.includes('OTE')
+  ) {
+    return 'NISSAN';
+  }
+
+  return null;
 }
 
 

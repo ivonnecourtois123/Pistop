@@ -96,15 +96,35 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
   // Lista consolidada de marcas disponibles (estrictamente marcas oficiales del Grupo)
   const availableBrands = GROUP_BRANDS;
 
-  // Lista consolidada de agencias disponibles
+  // Lista consolidada de agencias disponibles (filtradas por marca si hay una marca activa)
   const availableAgencies = useMemo(() => {
-    const set = new Set(DEFAULT_AGENCIES);
+    const list = brandFilter === 'ALL'
+      ? DEFAULT_AGENCIES
+      : DEFAULT_AGENCIES.filter((ag) => getAgencyBrand(ag) === brandFilter);
+
+    const set = new Set(list);
     inProgressList.forEach((wo) => {
       const raw = wo.agency || wo.tower;
-      if (raw && raw.trim()) set.add(getFullAgencyName(raw.trim()));
+      if (raw && raw.trim()) {
+        const full = getFullAgencyName(raw.trim());
+        const b = getAgencyBrand(full) || (wo.vehicle?.brand || '').trim().toUpperCase();
+        if (brandFilter === 'ALL' || b === brandFilter) {
+          set.add(full);
+        }
+      }
     });
-    return Array.from(set).sort();
-  }, [inProgressList]);
+    return Array.from(set);
+  }, [inProgressList, brandFilter]);
+
+  // Si cambia la marca y la agencia seleccionada no pertenece a esa marca, resetear a 'ALL'
+  useEffect(() => {
+    if (agencyFilter !== 'ALL' && brandFilter !== 'ALL') {
+      const agBrand = getAgencyBrand(agencyFilter);
+      if (agBrand && agBrand !== brandFilter) {
+        setAgencyFilter('ALL');
+      }
+    }
+  }, [brandFilter, agencyFilter]);
 
   function daysSince(dateString) {
     if (!dateString) return 0;

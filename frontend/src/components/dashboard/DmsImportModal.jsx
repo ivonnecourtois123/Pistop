@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { syncDmsRows, cleanDemoOrders } from '../../api/dmsSync.js';
-import { DEFAULT_AGENCIES, getAgencyBrand } from '../../constants/immobilized.js';
+import { DEFAULT_AGENCIES, AGENCIES_BY_BRAND, getAgencyBrand } from '../../constants/immobilized.js';
 
 export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
   const [file, setFile] = useState(null);
@@ -200,10 +200,14 @@ export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
                   onChange={(e) => setSelectedAgency(e.target.value)}
                   className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-900 focus:border-emerald-600 focus:outline-none disabled:opacity-50 disabled:bg-slate-100 shadow-2xs"
                 >
-                  {DEFAULT_AGENCIES.map((ag) => (
-                    <option key={ag} value={ag}>
-                      {ag}
-                    </option>
+                  {Object.entries(AGENCIES_BY_BRAND).map(([brand, list]) => (
+                    <optgroup key={brand} label={`── ${brand} ──`}>
+                      {list.map((ag) => (
+                        <option key={ag.id} value={ag.id}>
+                          {ag.name} ({brand})
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
                 {assignAgency && (

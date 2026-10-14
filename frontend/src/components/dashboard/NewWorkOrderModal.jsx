@@ -3,7 +3,7 @@ import { createWorkOrder } from '../../api/workOrders.js';
 import { listVehicles } from '../../api/vehicles.js';
 import { listTechnicians } from '../../api/technicians.js';
 import { getServiceCategoryHours } from '../../api/capacity.js';
-import { DEFAULT_AGENCIES } from '../../constants/immobilized.js';
+import { DEFAULT_AGENCIES, AGENCIES_BY_BRAND } from '../../constants/immobilized.js';
 import { formatServiceCategoryLabel } from '../../constants/priority.js';
 
 function nowPlusHoursDatetimeLocal(hours = 3) {
@@ -209,10 +209,14 @@ export default function NewWorkOrderModal({ orderType = 'SERVICIO', onClose, onC
                   onChange={(e) => setAgency(e.target.value)}
                   className="w-full rounded-lg border border-outline-variant bg-white px-3 py-2 font-body-md text-xs font-semibold text-primary focus:border-primary focus:outline-none cursor-pointer"
                 >
-                  {DEFAULT_AGENCIES.map((ag) => (
-                    <option key={ag} value={ag}>
-                      {ag}
-                    </option>
+                  {Object.entries(AGENCIES_BY_BRAND).map(([brand, list]) => (
+                    <optgroup key={brand} label={`── ${brand} ──`}>
+                      {list.map((ag) => (
+                        <option key={ag.id} value={ag.id}>
+                          {ag.name} ({brand})
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>
