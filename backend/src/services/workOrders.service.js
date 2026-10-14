@@ -669,7 +669,48 @@ async function listServiceCategoryHours() {
   return prisma.serviceCategoryHours.findMany({ orderBy: { category: 'asc' } });
 }
 
-async function updateServiceCategoryHours(category, hours) {
+async function getServiceCategoryImpact(category) {
+  const orders = await prisma.workOrder.findMany({
+    where: { serviceCategory: category },
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      orderType: true,
+      vehicle: {
+        select: {
+          brand: true,
+          model: true,
+          plate: true,
+        },
+      },
+    },
+    orderBy: { receivedAt: 'desc' },
+  });
+  return {
+    category,
+    count: orders.length,
+    orders,
+  };
+}
+
+async function updateServiceCategoryHours(category, hours, newCategory) {
+  if (newCategory && newCategory !== category) {
+    const updated = await prisma.serviceCategoryHours.upsert({
+      where: { category: newCategory },
+      update: { hours },
+      create: { category: newCategory, hours },
+    });
+    await prisma.workOrder.updateMany({
+      where: { serviceCategory: category },
+      data: { serviceCategory: newCategory },
+    });
+    await prisma.serviceCategoryHours.deleteMany({
+      where: { category },
+    });
+    return updated;
+  }
+
   return prisma.serviceCategoryHours.upsert({
     where: { category },
     update: { hours },
@@ -677,9 +718,60 @@ async function updateServiceCategoryHours(category, hours) {
   });
 }
 
-async function deleteServiceCategoryHours(category) {
-  return prisma.serviceCategoryHours.delete({
+async function deleteServiceCategoryHours(category, { reassignTo, unassign } = {}) {
+  if (reassignTo) {
+    await prisma.workOrder.updateMany({
+      where: { serviceCategory: category },
+      data: { serviceCategory: reassignTo },
+    });
+  } else if (unassign) {
+    await prisma.workOrder.updateMany({
+      where: { serviceCategory: category },
+      data: { serviceCategory: null },
+    });
+  }
+
+  return prisma.serviceCategoryHours.deleteMany({
     where: { category },
+  });
+}
+
+async function getOrphanedServiceCategories() {
+  const configured = await prisma.serviceCategoryHours.findMany({ select: { category: true } });
+  const configuredKeys = new Set(configured.map((c) => c.category));
+
+  const allWithCategory = await prisma.workOrder.findMany({
+    where: { serviceCategory: { not: null } },
+    select: {
+      id: true,
+      orderNumber: true,
+      serviceCategory: true,
+      status: true,
+      vehicle: { select: { brand: true, model: true, plate: true } },
+    },
+    orderBy: { receivedAt: 'desc' },
+  });
+
+  const orphaned = allWithCategory.filter((wo) => !configuredKeys.has(wo.serviceCategory));
+  const groups = {};
+  for (const wo of orphaned) {
+    if (!groups[wo.serviceCategory]) {
+      groups[wo.serviceCategory] = [];
+    }
+    groups[wo.serviceCategory].push(wo);
+  }
+
+  return Object.entries(groups).map(([category, orders]) => ({
+    category,
+    count: orders.length,
+    orders,
+  }));
+}
+
+async function reassignServiceCategory(fromCategory, toCategory) {
+  return prisma.workOrder.updateMany({
+    where: { serviceCategory: fromCategory },
+    data: { serviceCategory: toCategory || null },
   });
 }
 
@@ -710,6 +802,9 @@ module.exports = {
   getCapacitySettings,
   updateCapacitySettings,
   listServiceCategoryHours,
+  getServiceCategoryImpact,
+  getOrphanedServiceCategories,
+  reassignServiceCategory,
   updateServiceCategoryHours,
   deleteServiceCategoryHours,
 };

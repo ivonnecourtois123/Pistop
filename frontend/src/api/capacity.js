@@ -20,8 +20,13 @@ export async function getServiceCategoryHours() {
   return data;
 }
 
-export async function updateServiceCategoryHours(category, hours) {
-  const { data } = await apiClient.patch(`/work-orders/capacity/service-category-hours/${category}`, { hours });
+export async function getServiceCategoryImpact(category) {
+  const { data } = await apiClient.get(`/work-orders/capacity/service-category-impact/${encodeURIComponent(category)}`);
+  return data;
+}
+
+export async function updateServiceCategoryHours(category, hours, newCategory) {
+  const { data } = await apiClient.patch(`/work-orders/capacity/service-category-hours/${encodeURIComponent(category)}`, { hours, newCategory });
   return data;
 }
 
@@ -30,7 +35,17 @@ export async function createServiceCategoryHours(category, hours) {
   return data;
 }
 
-export async function deleteServiceCategoryHours(category) {
-  const { data } = await apiClient.delete(`/work-orders/capacity/service-category-hours/${category}`);
+export async function deleteServiceCategoryHours(category, options = {}) {
+  const { data } = await apiClient.delete(`/work-orders/capacity/service-category-hours/${encodeURIComponent(category)}`, { data: options });
+  return data;
+}
+
+export async function getOrphanedServiceCategories() {
+  const { data } = await apiClient.get('/work-orders/capacity/orphaned-categories');
+  return data;
+}
+
+export async function reassignServiceCategory(fromCategory, toCategory) {
+  const { data } = await apiClient.post('/work-orders/capacity/reassign-category', { fromCategory, toCategory });
   return data;
 }

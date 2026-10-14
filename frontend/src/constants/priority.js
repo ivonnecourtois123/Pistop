@@ -12,3 +12,9 @@ export const SERVICE_CATEGORIES = [
 export const SERVICE_CATEGORY_LABEL = Object.fromEntries(
   SERVICE_CATEGORIES.map((c) => [c.key, c.label])
 );
+
+export function formatServiceCategoryLabel(key) {
+  if (!key) return 'Sin definir';
+  if (SERVICE_CATEGORY_LABEL[key]) return SERVICE_CATEGORY_LABEL[key];
+  return key.replace(/_/g, ' ');
+}

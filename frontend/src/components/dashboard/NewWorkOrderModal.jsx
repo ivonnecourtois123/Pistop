@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { createWorkOrder } from '../../api/workOrders.js';
 import { listVehicles } from '../../api/vehicles.js';
 import { listTechnicians } from '../../api/technicians.js';
+import { getServiceCategoryHours } from '../../api/capacity.js';
 import { DEFAULT_AGENCIES } from '../../constants/immobilized.js';
+import { formatServiceCategoryLabel } from '../../constants/priority.js';
 
 function nowPlusHoursDatetimeLocal(hours = 3) {
   const d = new Date(Date.now() + hours * 60 * 60 * 1000);
@@ -23,7 +25,8 @@ export default function NewWorkOrderModal({ orderType = 'SERVICIO', onClose, onC
   const [orderNumber, setOrderNumber] = useState('');
   const [agency, setAgency] = useState(DEFAULT_AGENCIES[0] || 'Tuxtla Poniente');
   const [serviceType, setServiceType] = useState(isHyp ? 'Hojalatería y Pintura General' : 'Mantenimiento Preventivo');
-  const [serviceCategory, setServiceCategory] = useState(isHyp ? null : 'MANTENIMIENTO');
+  const [serviceCategory, setServiceCategory] = useState(isHyp ? null : '');
+  const [categoryList, setCategoryList] = useState([]);
   const [technicianId, setTechnicianId] = useState('');
   const [estimatedDeliveryAt, setEstimatedDeliveryAt] = useState(nowPlusHoursDatetimeLocal(3));
   const [notes, setNotes] = useState('');
@@ -55,17 +58,26 @@ export default function NewWorkOrderModal({ orderType = 'SERVICIO', onClose, onC
   const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([listVehicles().catch(() => []), listTechnicians().catch(() => [])])
-      .then(([vList, tList]) => {
+    Promise.all([
+      listVehicles().catch(() => []),
+      listTechnicians().catch(() => []),
+      getServiceCategoryHours().catch(() => []),
+    ])
+      .then(([vList, tList, cList]) => {
         setVehicles(vList);
         if (vList.length > 0) setSelectedVehicleId(vList[0].id);
 
         // Filtrar técnicos por equipo
         const filteredTechs = tList.filter((t) => t.team === orderType && t.active);
         setTechnicians(filteredTechs);
+
+        setCategoryList(cList || []);
+        if (!isHyp && cList && cList.length > 0) {
+          setServiceCategory((prev) => prev || cList[0].category);
+        }
       })
       .finally(() => setLoadingInitial(false));
-  }, [orderType]);
+  }, [orderType, isHyp]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -212,13 +224,19 @@ export default function NewWorkOrderModal({ orderType = 'SERVICIO', onClose, onC
                     CLASIFICACIÓN DE TALLER
                   </label>
                   <select
-                    value={serviceCategory || 'MANTENIMIENTO'}
+                    value={serviceCategory || ''}
                     onChange={(e) => setServiceCategory(e.target.value)}
                     className="w-full rounded-lg border border-outline-variant bg-white px-3 py-2 font-body-md text-xs font-semibold text-primary focus:border-primary focus:outline-none cursor-pointer"
                   >
-                    <option value="MANTENIMIENTO">Mantenimiento Preventivo (1.5h)</option>
-                    <option value="DIAGNOSTICO_FALLA_RECLAMO">Diagnóstico / Falla (2.0h)</option>
-                    <option value="PREVIA">Previa (0.5h)</option>
+                    {categoryList.length === 0 ? (
+                      <option value="">Sin tipos de servicio configurados</option>
+                    ) : (
+                      categoryList.map((c) => (
+                        <option key={c.category} value={c.category}>
+                          {formatServiceCategoryLabel(c.category)} ({c.hours}h)
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
               ) : (

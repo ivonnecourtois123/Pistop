@@ -21,7 +21,7 @@ const createSchema = z.object({
   orderNumber: z.string().min(1).optional(),
   orderType: z.enum(ORDER_TYPES).optional(),
   serviceType: z.string().optional(),
-  serviceCategory: z.union([z.null(), z.enum(SERVICE_CATEGORIES)]).optional(),
+  serviceCategory: z.union([z.null(), z.string().min(1)]).optional(),
   agency: z.string().optional(),
   customerWaiting: z.boolean().optional(),
   washNeeded: z.boolean().optional(),
@@ -70,7 +70,7 @@ const pendingPartReceivedSchema = z.object({
 
 // null deja la categoría sin definir
 const serviceCategorySchema = z.object({
-  serviceCategory: z.union([z.null(), z.enum(SERVICE_CATEGORIES)]),
+  serviceCategory: z.union([z.null(), z.string().min(1)]),
 });
 
 const diagnosisNeededSchema = z.object({
@@ -297,17 +297,44 @@ async function createServiceCategoryHours(req, res) {
   res.status(201).json(data);
 }
 
+async function getServiceCategoryImpact(req, res) {
+  const { category } = req.params;
+  const data = await workOrdersService.getServiceCategoryImpact(category);
+  res.json(data);
+}
+
 async function updateServiceCategoryHours(req, res) {
   const { category } = req.params;
-  const { hours } = serviceCategoryHoursSchema.parse(req.body);
-  const data = await workOrdersService.updateServiceCategoryHours(category, hours);
+  const { hours, newCategory } = req.body;
+  const numHours = hours !== undefined ? parseFloat(hours) : undefined;
+  if (numHours !== undefined && (isNaN(numHours) || numHours < 0)) {
+    return res.status(400).json({ error: 'Las horas deben ser un número mayor o igual a 0' });
+  }
+  const cleanNewCategory = newCategory ? newCategory.trim().toUpperCase().replace(/\s+/g, '_') : undefined;
+  const data = await workOrdersService.updateServiceCategoryHours(category, numHours, cleanNewCategory);
   res.json(data);
 }
 
 async function deleteServiceCategoryHours(req, res) {
   const { category } = req.params;
-  await workOrdersService.deleteServiceCategoryHours(category);
+  const reassignTo = req.body?.reassignTo || req.query?.reassignTo;
+  const unassign = req.body?.unassign === true || req.query?.unassign === 'true';
+  await workOrdersService.deleteServiceCategoryHours(category, { reassignTo, unassign });
   res.json({ success: true, message: `Tipo de servicio ${category} eliminado` });
+}
+
+async function getOrphanedServiceCategories(req, res) {
+  const data = await workOrdersService.getOrphanedServiceCategories();
+  res.json(data);
+}
+
+async function reassignServiceCategory(req, res) {
+  const { fromCategory, toCategory } = req.body;
+  if (!fromCategory) {
+    return res.status(400).json({ error: 'fromCategory es requerido' });
+  }
+  const result = await workOrdersService.reassignServiceCategory(fromCategory, toCategory);
+  res.json({ success: true, count: result.count });
 }
 
 async function getStageDurationsReport(req, res) {
@@ -356,6 +383,9 @@ module.exports = {
   getCapacitySettings,
   updateCapacitySettings,
   listServiceCategoryHours,
+  getServiceCategoryImpact,
+  getOrphanedServiceCategories,
+  reassignServiceCategory,
   createServiceCategoryHours,
   updateServiceCategoryHours,
   deleteServiceCategoryHours,
