@@ -181,7 +181,7 @@ function normalizeDmsRow(row) {
  * Importa o actualiza una lista de filas en la base de datos.
  */
 async function processDmsRows(rawRows, options = {}) {
-  const { cleanPreviousDemos = false } = options;
+  const { cleanPreviousDemos = false, agency = null } = options;
 
   if (cleanPreviousDemos) {
     await clearDemoOrders();
@@ -224,6 +224,7 @@ async function processDmsRows(rawRows, options = {}) {
       serviceCategory: serviceCategory || undefined,
       partsNeeded: row.partsNeeded,
       notes: notes || undefined,
+      ...(agency ? { agency } : {}),
       ...(row.entradaDate ? { receivedAt: row.entradaDate } : {}),
     };
 

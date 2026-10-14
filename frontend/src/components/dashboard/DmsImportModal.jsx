@@ -1,11 +1,14 @@
 import { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { syncDmsRows, cleanDemoOrders } from '../../api/dmsSync.js';
+import { DEFAULT_AGENCIES } from '../../constants/immobilized.js';
 
 export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
   const [file, setFile] = useState(null);
   const [parsedRows, setParsedRows] = useState([]);
   const [cleanDemos, setCleanDemos] = useState(true);
+  const [assignAgency, setAssignAgency] = useState(true);
+  const [selectedAgency, setSelectedAgency] = useState('San Cristóbal');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -64,10 +67,11 @@ export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
     setResultMsg(null);
 
     try {
-      const res = await syncDmsRows(parsedRows, cleanDemos);
+      const agencyToAssign = assignAgency && selectedAgency ? selectedAgency : null;
+      const res = await syncDmsRows(parsedRows, cleanDemos, agencyToAssign);
       setResultMsg({
         success: true,
-        text: `¡Sincronización exitosa! Se procesaron ${res.totalProcessed} órdenes (${res.created} nuevas creadas, ${res.updated} actualizadas).`,
+        text: `¡Sincronización exitosa! Se procesaron ${res.totalProcessed} órdenes (${res.created} nuevas creadas, ${res.updated} actualizadas)${agencyToAssign ? ` asignadas a ${agencyToAssign}` : ''}.`,
       });
       if (onImportSuccess) {
         onImportSuccess();
@@ -155,25 +159,55 @@ export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
           )}
 
           {/* Opciones previas */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 border border-outline-variant/60 text-xs">
-            <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
-              <input
-                type="checkbox"
-                checked={cleanDemos}
-                onChange={(e) => setCleanDemos(e.target.checked)}
-                className="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4"
-              />
-              <span>Limpiar automáticamente órdenes de demostración (WO-...) al importar</span>
-            </label>
+          <div className="space-y-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-50 border border-outline-variant/60 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={cleanDemos}
+                  onChange={(e) => setCleanDemos(e.target.checked)}
+                  className="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4"
+                />
+                <span>Limpiar automáticamente órdenes de demostración (WO-...) al importar</span>
+              </label>
 
-            <button
-              type="button"
-              onClick={handleCleanOnlyDemos}
-              disabled={isCleaning}
-              className="text-[11px] text-red-600 hover:text-red-800 font-semibold underline underline-offset-2 shrink-0 self-start sm:self-auto cursor-pointer"
-            >
-              {isCleaning ? 'Limpiando...' : '🗑️ Solo borrar ejemplos'}
-            </button>
+              <button
+                type="button"
+                onClick={handleCleanOnlyDemos}
+                disabled={isCleaning}
+                className="text-[11px] text-red-600 hover:text-red-800 font-semibold underline underline-offset-2 shrink-0 self-start sm:self-auto cursor-pointer"
+              >
+                {isCleaning ? 'Limpiando...' : '🗑️ Solo borrar ejemplos'}
+              </button>
+            </div>
+
+            {/* Check y selector de Agencia / Sucursal */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-200/80 text-xs">
+              <label className="flex items-center gap-2 cursor-pointer font-bold text-emerald-950">
+                <input
+                  type="checkbox"
+                  checked={assignAgency}
+                  onChange={(e) => setAssignAgency(e.target.checked)}
+                  className="rounded border-emerald-400 text-emerald-700 focus:ring-emerald-600 h-4 w-4"
+                />
+                <span>Asignar estas órdenes a la agencia:</span>
+              </label>
+
+              <div className="flex items-center gap-2">
+                <select
+                  disabled={!assignAgency}
+                  value={selectedAgency}
+                  onChange={(e) => setSelectedAgency(e.target.value)}
+                  className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-bold text-emerald-900 focus:border-emerald-600 focus:outline-none disabled:opacity-50 disabled:bg-slate-100 shadow-2xs"
+                >
+                  {DEFAULT_AGENCIES.map((ag) => (
+                    <option key={ag} value={ag}>
+                      {ag}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* Dropzone */}
