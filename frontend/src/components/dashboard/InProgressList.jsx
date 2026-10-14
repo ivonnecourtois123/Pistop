@@ -433,23 +433,22 @@ const DEFAULT_COLUMN_KEYS = {
 };
 
 const DEFAULT_COLUMN_WIDTHS = {
-  agencia: 135,
-  orden: 95,
-  unidad: 210,
-  cliente: 160,
-  promesa: 175,
-  antiguedad: 95,
-  servicio: 160,
-  tecnico: 150,
-  diagnostico: 90,
-  lavado: 80,
-  estatus: 165,
-  refacciones: 130,
+  orden: 80,
+  unidad: 160,
+  cliente: 135,
+  promesa: 135,
+  antiguedad: 75,
+  servicio: 130,
+  tecnico: 120,
+  diagnostico: 75,
+  lavado: 70,
+  estatus: 135,
+  refacciones: 105,
 };
 
-const MIN_COLUMN_WIDTH = 55;
-const WIDTH_STORAGE_PREFIX = 'pitstop.inProgressColumnWidths.v6.';
-const STORAGE_PREFIX = 'pitstop.inProgressColumns.v6.';
+const MIN_COLUMN_WIDTH = 50;
+const WIDTH_STORAGE_PREFIX = 'pitstop.inProgressColumnWidths.v7.';
+const STORAGE_PREFIX = 'pitstop.inProgressColumns.v7.';
 
 function loadColumnWidths(orderType) {
   try {
@@ -786,29 +785,6 @@ function ExpandableOrderDetails({ workOrder, onStatusChanged, onSelect }) {
                 </div>
               )}
             </div>
-
-            {/* Botones de comentario rápido */}
-            <div className="mt-2.5 flex flex-wrap gap-1.5 items-center">
-              <span className="text-[10px] text-on-surface-variant font-semibold">Atajos:</span>
-              {[
-                '📞 Cliente notificado',
-                '📦 Esperando refacción de almacén',
-                '🔧 En prueba de ruta',
-                '🧼 Unidad enviada a lavado',
-                '✅ Control de calidad aprobado',
-                '🚗 Listo para entrega',
-              ].map((chip) => (
-                <button
-                  key={chip}
-                  type="button"
-                  onClick={() => handleAddQuickComment(null, chip)}
-                  disabled={savingComment}
-                  className="rounded-full border border-outline-variant bg-white px-2 py-0.5 text-[10px] text-on-surface-variant hover:border-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
-                >
-                  {chip}
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Formulario de nuevo comentario */}
@@ -1053,7 +1029,7 @@ export default function InProgressList({
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="table-fixed border-collapse text-left" style={{ width: Math.max(totalWidth, 1100) }}>
+          <table className="w-full table-fixed border-collapse text-left" style={{ minWidth: '100%' }}>
             <colgroup>
               <col style={{ width: 40 }} />
               {columns.map((col) => (
