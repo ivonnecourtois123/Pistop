@@ -283,6 +283,7 @@ async function processDmsRows(rawRows, options = {}) {
         });
       }
     }
+  }
 
   return {
     success: true,
