@@ -227,6 +227,10 @@ async function processDmsRows(rawRows, options = {}) {
       ...(row.entradaDate ? { receivedAt: row.entradaDate } : {}),
     };
 
+    const existing = await prisma.workOrder.findUnique({
+      where: { orderNumber: row.orderNumber },
+    });
+
     let workOrderId;
     if (!existing) {
       const created = await prisma.workOrder.create({
