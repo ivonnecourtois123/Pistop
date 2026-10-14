@@ -9,6 +9,7 @@ const statusMappingsRoutes = require('./statusMappings.routes');
 const usersRoutes = require('./users.routes');
 const immobilizedRoutes = require('./immobilized.routes');
 const insuranceCasesRoutes = require('./insuranceCases.routes');
+const dmsSyncRoutes = require('./dmsSync.routes');
 
 const router = Router();
 
@@ -23,5 +24,6 @@ router.use('/status-mappings', statusMappingsRoutes);
 router.use('/users', usersRoutes);
 router.use('/immobilized', immobilizedRoutes);
 router.use('/insurance-cases', insuranceCasesRoutes);
+router.use('/dms', dmsSyncRoutes);
 
 module.exports = router;

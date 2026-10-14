@@ -7,6 +7,7 @@ import PromiseTimeBoard from './PromiseTimeBoard.jsx';
 import HypDeliveryAgenda from './HypDeliveryAgenda.jsx';
 import OrderStageDetailModal from './OrderStageDetailModal.jsx';
 import NewWorkOrderModal from './NewWorkOrderModal.jsx';
+import DmsImportModal from './DmsImportModal.jsx';
 import Spinner from '../common/Spinner.jsx';
 import MaintenanceQuoter from '../quoter/MaintenanceQuoter.jsx';
 import { getTodayStats, getInProgressWorkOrders, getWorkOrder } from '../../api/workOrders.js';
@@ -39,6 +40,7 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
   const [standardHours, setStandardHours] = useState(null);
   const [agingFilter, setAgingFilter] = useState(null); // null | 'with_parts' | 'over15' | 'over30' | 'over60'
   const [showNewOrderModal, setShowNewOrderModal] = useState(false);
+  const [showDmsImportModal, setShowDmsImportModal] = useState(false);
 
   const loadStats = useCallback(async () => {
     const data = await getTodayStats(orderType);
@@ -243,15 +245,25 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
               </div>
             </div>
 
-            {/* Acciones principales: Nueva Orden y Buscador */}
+            {/* Acciones principales: Sincronizar DMS, Nueva Orden y Buscador */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowDmsImportModal(true)}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-600/30 bg-emerald-50 px-3.5 py-2.5 font-label-caps text-xs font-bold text-emerald-800 hover:bg-emerald-100 hover:border-emerald-600/50 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap shadow-2xs"
+                title="Cargar archivo Excel del DMS para alimentar o actualizar órdenes"
+              >
+                <span className="material-symbols-outlined text-base text-emerald-600">sync_alt</span>
+                <span>Alimentar DMS / Excel</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setShowNewOrderModal(true)}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 font-label-caps text-xs font-bold text-white shadow-xs hover:bg-primary/90 active:scale-[0.98] transition-all cursor-pointer whitespace-nowrap"
               >
                 <span className="material-symbols-outlined text-base">add_circle</span>
-                <span>Nueva Orden de Reparación</span>
+                <span>Nueva Orden</span>
               </button>
 
               {/* Buscador de órdenes discreto y elegante */}
@@ -533,6 +545,15 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
           }}
         />
       )}
+
+      {/* Modal para Alimentar / Sincronizar DMS desde Excel o CSV */}
+      <DmsImportModal
+        isOpen={showDmsImportModal}
+        onClose={() => setShowDmsImportModal(false)}
+        onImportSuccess={() => {
+          handleOrderUpdated();
+        }}
+      />
     </div>
   );
 }
