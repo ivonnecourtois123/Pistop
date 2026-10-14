@@ -4,7 +4,7 @@ import TechnicianSelector from './TechnicianSelector.jsx';
 import ServiceCategorySelector from './ServiceCategorySelector.jsx';
 import InlineCheckbox from './InlineCheckbox.jsx';
 import InlineTextField from './InlineTextField.jsx';
-import { STAGE_LABEL, getStages } from '../../constants/stages.js';
+import { STAGE_LABEL } from '../../constants/stages.js';
 import { sortByPriority } from '../../utils/priority.js';
 import { computeWorkProgress, PROGRESS_DOT_CLASS } from '../../utils/workProgress.js';
 import {
@@ -14,7 +14,6 @@ import {
   updateReportNumber,
   addStageComment,
   updateWorkOrderSubState,
-  updateWorkOrderStatus,
 } from '../../api/workOrders.js';
 
 const FINAL_STAGE_BADGE = new Set(['TERMINADO', 'ENTREGADO']);
@@ -489,29 +488,11 @@ function saveColumnOrder(orderType, order) {
   }
 }
 
-function ExpandableOrderDetails({ workOrder, onStatusChanged, onSelect }) {
+function ExpandableOrderDetails({ workOrder, onStatusChanged }) {
   const [newComment, setNewComment] = useState('');
   const [savingComment, setSavingComment] = useState(false);
-  const [advancingStage, setAdvancingStage] = useState(false);
-  const [selectedJumpStage, setSelectedJumpStage] = useState('');
 
   const comments = workOrder.stageComments || [];
-  const stages = getStages(workOrder.orderType);
-  const currentIndex = stages.findIndex((s) => s.key === workOrder.status);
-  const nextStage = stages[currentIndex + 1] || null;
-
-  async function handleAdvanceTo(targetStageKey, noteText) {
-    if (!targetStageKey || advancingStage) return;
-    setAdvancingStage(true);
-    try {
-      const updated = await updateWorkOrderStatus(workOrder.id, targetStageKey, noteText);
-      onStatusChanged?.(updated);
-    } catch {
-      // handled
-    } finally {
-      setAdvancingStage(false);
-    }
-  }
 
   async function handleAddQuickComment(e, commentOverride) {
     if (e) e.preventDefault();
@@ -531,125 +512,7 @@ function ExpandableOrderDetails({ workOrder, onStatusChanged, onSelect }) {
 
   return (
     <div className="border-t-2 border-emerald-500/40 bg-slate-50/95 p-4 space-y-4 text-xs shadow-inner">
-      {/* 1. PIPELINE DE ETAPAS INTERACTIVO EN LÍNEA */}
-      <div className="rounded-xl border border-outline-variant bg-white p-4 shadow-sm space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/60 pb-3">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white font-bold text-xs shadow-xs">
-              ⚡
-            </span>
-            <div>
-              <h4 className="font-headline-md text-sm font-bold text-primary">
-                Flujo de Etapas ({workOrder.orderType}) — Etapa Actual: <span className="text-emerald-600 font-extrabold">{STAGE_LABEL[workOrder.status] || workOrder.status}</span>
-              </h4>
-              <p className="text-[11px] text-on-surface-variant">
-                Haz clic en cualquier etapa para mover la orden o utiliza los botones de avance rápido.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {nextStage && (
-              <button
-                type="button"
-                onClick={() => handleAdvanceTo(nextStage.key, `Avanzado a ${nextStage.label}`)}
-                disabled={advancingStage}
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 font-label-caps text-xs font-bold text-white shadow-sm hover:bg-emerald-700 hover:shadow transition-all disabled:opacity-50 cursor-pointer"
-                title={`Avanzar inmediatamente a ${nextStage.label}`}
-              >
-                <span className="material-symbols-outlined text-sm" data-icon="arrow_forward">
-                  arrow_forward
-                </span>
-                {advancingStage ? 'Actualizando...' : `Avanzar a: ${nextStage.label}`}
-              </button>
-            )}
-
-            <div className="flex items-center gap-1">
-              <select
-                value={selectedJumpStage}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val) {
-                    handleAdvanceTo(val, `Cambio directo a ${STAGE_LABEL[val] || val}`);
-                    setSelectedJumpStage('');
-                  }
-                }}
-                className="rounded-lg border border-outline-variant bg-surface px-2.5 py-1.5 text-xs text-primary font-medium focus:border-primary focus:outline-none"
-              >
-                <option value="">Mover a otra etapa...</option>
-                {stages.map((s) => (
-                  <option key={s.key} value={s.key}>
-                    {s.label} {s.key === workOrder.status ? ' (Actual)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => onSelect?.(workOrder)}
-              className="flex items-center gap-1 rounded-lg border border-primary/40 bg-primary/5 px-3 py-1.5 font-label-caps text-xs font-bold text-primary hover:bg-primary hover:text-white transition-colors cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-sm" data-icon="open_in_new">
-                open_in_new
-              </span>
-              Ver Ficha / Modal
-            </button>
-          </div>
-        </div>
-
-        {/* Mini Stepper Horizontal */}
-        <div className="overflow-x-auto pb-2 pt-1">
-          <div className="flex items-center gap-2 min-w-max">
-            {stages.map((st, idx) => {
-              const isPast = idx < currentIndex;
-              const isCurrent = idx === currentIndex;
-              const isNext = idx === currentIndex + 1;
-
-              return (
-                <button
-                  key={st.key}
-                  type="button"
-                  onClick={() => handleAdvanceTo(st.key, `Mover a etapa ${st.label}`)}
-                  disabled={advancingStage}
-                  title={`Clic para mover la orden a ${st.label}`}
-                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-left transition-all cursor-pointer ${
-                    isCurrent
-                      ? 'border-2 border-emerald-600 bg-emerald-600 text-white shadow-md ring-2 ring-emerald-300 font-bold scale-[1.02]'
-                      : isPast
-                      ? 'border-emerald-300 bg-emerald-50/60 text-emerald-900 hover:bg-emerald-100'
-                      : isNext
-                      ? 'border-blue-300 bg-blue-50/70 text-blue-900 hover:bg-blue-100 font-medium'
-                      : 'border-outline-variant/60 bg-surface-container-low text-on-surface-variant hover:bg-white hover:border-primary/40'
-                  }`}
-                >
-                  <span
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                      isCurrent
-                        ? 'bg-white text-emerald-700'
-                        : isPast
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-surface-container-high text-on-surface-variant'
-                    }`}
-                  >
-                    {isPast ? '✓' : idx + 1}
-                  </span>
-                  <div>
-                    <p className={`text-xs leading-tight ${isCurrent ? 'font-black text-white' : 'font-semibold'}`}>
-                      {st.label}
-                    </p>
-                    <p className={`text-[10px] ${isCurrent ? 'text-emerald-100' : 'text-on-surface-variant/70'}`}>
-                      {isCurrent ? '● EN CURSO' : isPast ? 'Completada' : 'Pendiente'}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* 2. GRID CON DETALLES Y BITÁCORA DE SEGUIMIENTOS */}
+      {/* GRID CON DETALLES Y BITÁCORA DE SEGUIMIENTOS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* 1. Info del vehículo & orden */}
         <div className="rounded-xl border border-outline-variant bg-white p-3.5 space-y-2 text-xs shadow-xs">
@@ -874,7 +737,6 @@ function WorkOrderRow({
             <ExpandableOrderDetails
               workOrder={workOrder}
               onStatusChanged={onStatusChanged}
-              onSelect={onSelect}
             />
           </td>
         </tr>
