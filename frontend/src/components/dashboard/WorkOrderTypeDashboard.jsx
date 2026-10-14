@@ -26,8 +26,8 @@ function matchesSearch(workOrder, term, { includeReportNumber } = {}) {
 }
 
 export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, showDeliveryAgenda }) {
-  // Pestañas principales: 'tablero' | 'seguimiento' | 'cotizador'
-  const [activeMainTab, setActiveMainTab] = useState('tablero');
+  // Pestañas principales: 'magnetoplano' | 'seguimiento' | 'cotizador' | 'dashboard'
+  const [activeMainTab, setActiveMainTab] = useState('magnetoplano');
   const [searchTerm, setSearchTerm] = useState('');
   const [brandFilter, setBrandFilter] = useState('ALL');
   const [agencyFilter, setAgencyFilter] = useState('ALL');
@@ -329,22 +329,22 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
             </div>
           </div>
 
-          {/* BARRA DE PESTAÑAS (TABLERO / SEGUIMIENTO / COTIZADOR) Y FILTROS */}
+          {/* BARRA DE PESTAÑAS (MAGNETOPLANO / SEGUIMIENTO / COTIZADOR / DASHBOARD) Y FILTROS */}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-outline-variant w-full pt-1">
             {/* Pestañas a la izquierda */}
             <div className="flex items-center -mb-px overflow-x-auto">
-              {/* 1. Tablero / Magnetoplano */}
+              {/* 1. Magnetoplano / Agenda de Entregas */}
               <button
                 type="button"
-                onClick={() => setActiveMainTab('tablero')}
+                onClick={() => setActiveMainTab('magnetoplano')}
                 className={`flex items-center gap-2 border-b-2 px-4 py-2.5 font-label-caps text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
-                  activeMainTab === 'tablero'
+                  activeMainTab === 'magnetoplano'
                     ? 'border-primary text-primary'
                     : 'border-transparent text-on-surface-variant hover:text-primary'
                 }`}
               >
-                <span className="material-symbols-outlined text-base">dashboard</span>
-                {orderType === 'HYP' ? 'Tablero y Agenda de Entregas' : 'Tablero / Magnetoplano'}
+                <span className="material-symbols-outlined text-base">view_kanban</span>
+                {orderType === 'HYP' ? 'Agenda de Entregas' : 'Magnetoplano'}
               </button>
 
               {/* 2. Seguimiento de Unidades (Unidades en Proceso y Rezagadas) */}
@@ -381,6 +381,20 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
                   Cotizador de Mantenimientos
                 </button>
               )}
+
+              {/* 4. Dashboard (Tablero y Ocupación de Mano de Obra) */}
+              <button
+                type="button"
+                onClick={() => setActiveMainTab('dashboard')}
+                className={`flex items-center gap-2 border-b-2 px-4 py-2.5 font-label-caps text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                  activeMainTab === 'dashboard'
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-on-surface-variant hover:text-primary'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">dashboard</span>
+                Dashboard
+              </button>
             </div>
 
             {/* Filtros compactos y discretos (Marca + Agencia + Limpiar) disponibles en Tablero y Seguimiento */}
@@ -486,20 +500,9 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
         ) : activeMainTab === 'cotizador' && orderType === 'SERVICIO' ? (
           /* PESTAÑA 3: COTIZADOR DE MANTENIMIENTOS */
           <MaintenanceQuoter />
-        ) : activeMainTab === 'tablero' ? (
-          /* PESTAÑA 1: TABLERO / MAGNETOPLANO Y CAPACIDAD */
+        ) : activeMainTab === 'magnetoplano' ? (
+          /* PESTAÑA 1: MAGNETOPLANO DE HORAS PROMESA / AGENDA HYP */
           <div className="w-full space-y-6">
-            {/* 1. Tarjetas Superiores: Refacciones y Clasificaciones de Antigüedad */}
-            <StatsTiles
-              stats={computedStats}
-              activeAgingFilter={agingFilter}
-              onSelectAgingFilter={(f) => {
-                setAgingFilter(f);
-                if (f) setActiveMainTab('seguimiento');
-              }}
-            />
-
-            {/* 2. Magnetoplano de Horas Promesa / Agenda HYP */}
             {showPromiseBoard && (
               <PromiseTimeBoard
                 workOrders={filteredList}
@@ -511,8 +514,21 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
             {showDeliveryAgenda && (
               <HypDeliveryAgenda workOrders={filteredList} onSelect={setDetailOrder} />
             )}
+          </div>
+        ) : activeMainTab === 'dashboard' ? (
+          /* PESTAÑA 4: DASHBOARD (TABLERO DE INDICADORES Y OCUPACIÓN DE MANO DE OBRA) */
+          <div className="w-full space-y-6">
+            {/* 1. Tarjetas Superiores: Refacciones y Clasificaciones de Antigüedad */}
+            <StatsTiles
+              stats={computedStats}
+              activeAgingFilter={agingFilter}
+              onSelectAgingFilter={(f) => {
+                setAgingFilter(f);
+                if (f) setActiveMainTab('seguimiento');
+              }}
+            />
 
-            {/* 3. Panel de Capacidad y Mano de Obra (MO) */}
+            {/* 2. Panel de Capacidad y Ocupación de Mano de Obra (MO) */}
             <CapacityPanel team={orderType} refreshKey={capacityRefreshKey} />
           </div>
         ) : (
