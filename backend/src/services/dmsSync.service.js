@@ -73,7 +73,18 @@ function parseDmsDateTime(dateRaw, timeRaw = null, defaultHour = 9) {
     if (slashMatch) {
       const [, p1, p2, yearPart] = slashMatch;
       const year = yearPart.length === 2 ? 2000 + Number(yearPart) : Number(yearPart);
-      d = new Date(year, Number(p2) - 1, Number(p1));
+      const n1 = Number(p1);
+      const n2 = Number(p2);
+      if (n1 > 12) {
+        // n1 > 12 -> DD/MM/YYYY (ej. 14/10/2026)
+        d = new Date(year, n2 - 1, n1);
+      } else if (n2 > 12) {
+        // n2 > 12 -> MM/DD/YYYY (ej. 10/14/2026 de Excel XLSX)
+        d = new Date(year, n1 - 1, n2);
+      } else {
+        // Ambos <= 12: en Excel XLSX exportado con raw:false el formato estándar es MM/DD/YY (ej. 10/2/26 = 2 de octubre)
+        d = new Date(year, n1 - 1, n2);
+      }
     } else {
       const parsed = new Date(value);
       if (!isNaN(parsed.getTime())) d = parsed;
