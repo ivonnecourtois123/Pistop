@@ -169,9 +169,378 @@ async function executiveKpisReport() {
   };
 }
 
+function resolveDateRange(period, startDate, endDate) {
+  const now = new Date();
+  let from;
+  let to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+  if (period === 'today') {
+    from = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  } else if (period === 'week') {
+    from = new Date(now);
+    const day = now.getDay() || 7; // Lunes = 1
+    from.setDate(now.getDate() - day + 1);
+    from.setHours(0, 0, 0, 0);
+  } else if (period === 'month') {
+    from = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  } else if (period === 'custom' && startDate) {
+    from = new Date(startDate);
+    from.setHours(0, 0, 0, 0);
+    if (endDate) {
+      to = new Date(endDate);
+      to.setHours(23, 59, 59, 999);
+    }
+  } else {
+    // 'all'
+    from = new Date(0);
+  }
+  return { from, to };
+}
+
+function getStageDuration(events, targetStage) {
+  let totalHours = 0;
+  for (let i = 0; i < events.length; i++) {
+    if (events[i].status === targetStage) {
+      const start = new Date(events[i].occurredAt);
+      const end = events[i + 1] ? new Date(events[i + 1].occurredAt) : new Date();
+      totalHours += Math.max(0, (end - start) / MS_PER_HOUR);
+    }
+  }
+  return totalHours;
+}
+
+/**
+ * Reporte de Rendimiento Operativo de Técnicos y Lavadores
+ * Separado estrictamente por Servicio Mecánico vs HYP (Carrocería y Pintura)
+ */
+async function productivityReport(params = {}) {
+  const {
+    orderType = 'SERVICIO',
+    period = 'month',
+    startDate = null,
+    endDate = null,
+    agency = null,
+  } = params;
+
+  const { from, to } = resolveDateRange(period, startDate, endDate);
+
+  // Catálogo de horas estándar para calcular horas vendidas
+  const standardHoursRows = await prisma.serviceCategoryHours.findMany();
+  const standardHoursMap = Object.fromEntries(standardHoursRows.map((r) => [r.category, r.hours]));
+
+  // Personal activo del módulo correspondiente
+  const [technicians, washers] = await Promise.all([
+    prisma.technician.findMany({
+      where: { team: orderType },
+      orderBy: { name: 'asc' },
+    }),
+    orderType === 'SERVICIO'
+      ? prisma.technician.findMany({
+          where: { team: 'LAVADO' },
+          orderBy: { name: 'asc' },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const whereClause = {
+    orderType,
+    ...(agency && agency !== 'ALL' ? { agency } : {}),
+    OR: [
+      { receivedAt: { gte: from, lte: to } },
+      { deliveredAt: { gte: from, lte: to } },
+      {
+        statusEvents: {
+          some: { occurredAt: { gte: from, lte: to } },
+        },
+      },
+    ],
+  };
+
+  const workOrders = await prisma.workOrder.findMany({
+    where: whereClause,
+    include: {
+      technician: true,
+      washer: true,
+      operations: {
+        include: { technician: true },
+      },
+      statusEvents: {
+        orderBy: { occurredAt: 'asc' },
+      },
+      vehicle: {
+        select: { brand: true, model: true, plate: true },
+      },
+    },
+  });
+
+  if (orderType === 'SERVICIO') {
+    // ----------------------------------------------------
+    // CÁLCULO PARA SERVICIO MECÁNICO
+    // ----------------------------------------------------
+    const techMap = new Map();
+    technicians.forEach((t) => {
+      techMap.set(t.id, {
+        id: t.id,
+        name: t.name,
+        specialty: t.specialty || 'Mecánica General',
+        active: t.active,
+        totalOrders: 0,
+        completedOrders: 0,
+        inProgressOrders: 0,
+        soldHours: 0,
+        realHours: 0,
+        onTimeOrders: 0,
+      });
+    });
+
+    const unassignedTech = {
+      id: 'unassigned',
+      name: 'Sin técnico asignado',
+      specialty: 'Taller General',
+      active: true,
+      totalOrders: 0,
+      completedOrders: 0,
+      inProgressOrders: 0,
+      soldHours: 0,
+      realHours: 0,
+      onTimeOrders: 0,
+    };
+
+    const washerMap = new Map();
+    washers.forEach((w) => {
+      washerMap.set(w.id, {
+        id: w.id,
+        name: w.name,
+        specialty: w.specialty || 'Bahía de Lavado',
+        active: w.active,
+        washedOrders: 0,
+        realHours: 0,
+        onTimeWashes: 0,
+      });
+    });
+
+    const unassignedWasher = {
+      id: 'unassigned-washer',
+      name: 'Sin lavador asignado',
+      specialty: 'Área de Lavado',
+      active: true,
+      washedOrders: 0,
+      realHours: 0,
+      onTimeWashes: 0,
+    };
+
+    for (const wo of workOrders) {
+      const isCompleted = ['TERMINADO', 'ENTREGADO'].includes(wo.status);
+      const events = wo.statusEvents || [];
+      const workshopHours = getStageDuration(events, 'EN_TALLER');
+      const hasOperations = wo.operations && wo.operations.length > 0;
+      const sold = hasOperations
+        ? wo.operations.reduce((sum, op) => sum + (op.standardHours || 0), 0) + (wo.alignmentNeeded ? 0.5 : 0)
+        : (standardHoursMap[wo.serviceCategory] || 1.5) + (wo.alignmentNeeded ? 0.5 : 0);
+
+      const techEntry = wo.technicianId ? (techMap.get(wo.technicianId) || unassignedTech) : unassignedTech;
+      techEntry.totalOrders += 1;
+
+      if (isCompleted || events.some((e) => ['LAVADO', 'CONTROL_CALIDAD', 'TERMINADO', 'ENTREGADO'].includes(e.status))) {
+        techEntry.completedOrders += 1;
+        techEntry.realHours += workshopHours;
+
+        if (hasOperations) {
+          for (const op of wo.operations) {
+            const opTechId = op.technicianId || wo.technicianId;
+            const opTechEntry = opTechId ? (techMap.get(opTechId) || unassignedTech) : unassignedTech;
+            opTechEntry.soldHours += (op.standardHours || 0);
+          }
+          if (wo.alignmentNeeded) {
+            techEntry.soldHours += 0.5;
+          }
+        } else {
+          techEntry.soldHours += sold;
+        }
+
+        if (wo.estimatedDeliveryAt && wo.deliveredAt) {
+          if (new Date(wo.deliveredAt) <= new Date(wo.estimatedDeliveryAt)) {
+            techEntry.onTimeOrders += 1;
+          }
+        } else if (workshopHours <= sold) {
+          techEntry.onTimeOrders += 1;
+        }
+      } else {
+        techEntry.inProgressOrders += 1;
+        techEntry.realHours += workshopHours;
+      }
+
+      // Lavado
+      if (wo.washNeeded !== false) {
+        const washHours = getStageDuration(events, 'LAVADO');
+        const hasPassedWash = events.some((e) => ['CONTROL_CALIDAD', 'TERMINADO', 'ENTREGADO'].includes(e.status)) || wo.status === 'LAVADO';
+        if (hasPassedWash && washHours > 0) {
+          const washerEntry = wo.washerId ? (washerMap.get(wo.washerId) || unassignedWasher) : unassignedWasher;
+          washerEntry.washedOrders += 1;
+          washerEntry.realHours += washHours;
+          // Objetivo: 1.5 horas (90 min) con tolerancia hasta 100 min
+          if (washHours <= 1.67) {
+            washerEntry.onTimeWashes += 1;
+          }
+        }
+      }
+    }
+
+    const techniciansList = Array.from(techMap.values())
+      .concat(unassignedTech.totalOrders > 0 ? [unassignedTech] : [])
+      .map((t) => {
+        const efficiency = t.realHours > 0 ? Math.round((t.soldHours / t.realHours) * 100) : (t.soldHours > 0 ? 100 : null);
+        const avgHoursPerOrder = t.completedOrders > 0 ? Number((t.realHours / t.completedOrders).toFixed(1)) : 0;
+        const onTimeRate = t.completedOrders > 0 ? Math.round((t.onTimeOrders / t.completedOrders) * 100) : 100;
+        return {
+          ...t,
+          soldHours: Number(t.soldHours.toFixed(1)),
+          realHours: Number(t.realHours.toFixed(1)),
+          efficiency,
+          avgHoursPerOrder,
+          onTimeRate,
+        };
+      });
+
+    const washersList = Array.from(washerMap.values())
+      .concat(unassignedWasher.washedOrders > 0 ? [unassignedWasher] : [])
+      .map((w) => {
+        const avgMinutes = w.washedOrders > 0 ? Math.round((w.realHours * 60) / w.washedOrders) : 0;
+        const complianceRate = w.washedOrders > 0 ? Math.round((w.onTimeWashes / w.washedOrders) * 100) : 100;
+        return {
+          ...w,
+          realHours: Number(w.realHours.toFixed(1)),
+          avgMinutesPerWash: avgMinutes,
+          complianceRate,
+        };
+      });
+
+    const totalSold = techniciansList.reduce((acc, t) => acc + t.soldHours, 0);
+    const totalReal = techniciansList.reduce((acc, t) => acc + t.realHours, 0);
+    const totalCompleted = techniciansList.reduce((acc, t) => acc + t.completedOrders, 0);
+    const globalEfficiency = totalReal > 0 ? Math.round((totalSold / totalReal) * 100) : (totalSold > 0 ? 100 : null);
+    const totalWashed = washersList.reduce((acc, w) => acc + w.washedOrders, 0);
+    const totalWashHours = washersList.reduce((acc, w) => acc + w.realHours, 0);
+    const avgWashMinutesGlobal = totalWashed > 0 ? Math.round((totalWashHours * 60) / totalWashed) : 0;
+
+    return {
+      orderType: 'SERVICIO',
+      period,
+      from,
+      to,
+      sampleOrdersCount: workOrders.length,
+      summary: {
+        totalCompletedOrders: totalCompleted,
+        totalSoldHours: Number(totalSold.toFixed(1)),
+        totalRealHours: Number(totalReal.toFixed(1)),
+        globalEfficiency,
+        totalWashedOrders: totalWashed,
+        avgWashMinutes: avgWashMinutesGlobal,
+      },
+      technicians: techniciansList,
+      washers: washersList,
+    };
+  } else {
+    // ----------------------------------------------------
+    // CÁLCULO PARA HYP (HOJALATERÍA Y PINTURA)
+    // ----------------------------------------------------
+    const hypTechMap = new Map();
+    technicians.forEach((t) => {
+      hypTechMap.set(t.id, {
+        id: t.id,
+        name: t.name,
+        specialty: t.specialty || 'Hojalatería y Pintura',
+        active: t.active,
+        totalOrders: 0,
+        completedOrders: 0,
+        inProgressOrders: 0,
+        totalDays: 0,
+        onTimeOrders: 0,
+      });
+    });
+
+    const unassignedHypTech = {
+      id: 'unassigned-hyp',
+      name: 'Sin técnico asignado',
+      specialty: 'Carrocería General',
+      active: true,
+      totalOrders: 0,
+      completedOrders: 0,
+      inProgressOrders: 0,
+      totalDays: 0,
+      onTimeOrders: 0,
+    };
+
+    let totalCompleted = 0;
+    let totalStayDays = 0;
+    let globalOnTimeCount = 0;
+
+    for (const wo of workOrders) {
+      const isCompleted = ['TERMINADO', 'ENTREGADO'].includes(wo.status);
+      const techEntry = wo.technicianId ? (hypTechMap.get(wo.technicianId) || unassignedHypTech) : unassignedHypTech;
+      techEntry.totalOrders += 1;
+
+      const start = new Date(wo.receivedAt);
+      const end = wo.deliveredAt ? new Date(wo.deliveredAt) : new Date();
+      const daysInShop = Math.max(0, (end - start) / (MS_PER_HOUR * 24));
+
+      if (isCompleted) {
+        techEntry.completedOrders += 1;
+        techEntry.totalDays += daysInShop;
+        totalCompleted += 1;
+        totalStayDays += daysInShop;
+        if (wo.estimatedDeliveryAt && wo.deliveredAt) {
+          if (new Date(wo.deliveredAt) <= new Date(wo.estimatedDeliveryAt)) {
+            techEntry.onTimeOrders += 1;
+            globalOnTimeCount += 1;
+          }
+        }
+      } else {
+        techEntry.inProgressOrders += 1;
+        techEntry.totalDays += daysInShop;
+      }
+    }
+
+    const hypTechniciansList = Array.from(hypTechMap.values())
+      .concat(unassignedHypTech.totalOrders > 0 ? [unassignedHypTech] : [])
+      .map((t) => {
+        const avgDays = t.completedOrders > 0
+          ? Number((t.totalDays / t.completedOrders).toFixed(1))
+          : (t.totalOrders > 0 ? Number((t.totalDays / t.totalOrders).toFixed(1)) : 0);
+        const onTimeRate = t.completedOrders > 0 ? Math.round((t.onTimeOrders / t.completedOrders) * 100) : 100;
+        return {
+          ...t,
+          totalDays: Number(t.totalDays.toFixed(1)),
+          avgDaysPerOrder: avgDays,
+          onTimeRate,
+        };
+      });
+
+    const avgStayDaysGlobal = totalCompleted > 0 ? Number((totalStayDays / totalCompleted).toFixed(1)) : 0;
+    const globalOnTimeRate = totalCompleted > 0 ? Math.round((globalOnTimeCount / totalCompleted) * 100) : 100;
+
+    return {
+      orderType: 'HYP',
+      period,
+      from,
+      to,
+      sampleOrdersCount: workOrders.length,
+      summary: {
+        totalCompletedOrders: totalCompleted,
+        avgStayDays: avgStayDaysGlobal,
+        globalOnTimeRate,
+        activeInProgress: workOrders.filter((w) => !['TERMINADO', 'ENTREGADO'].includes(w.status)).length,
+      },
+      technicians: hypTechniciansList,
+      washers: [],
+    };
+  }
+}
+
 module.exports = {
   stageDurationsReport,
   pendingPartsReport,
   executiveKpisReport,
+  productivityReport,
 };
 

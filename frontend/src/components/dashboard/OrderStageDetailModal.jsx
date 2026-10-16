@@ -1,19 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   updateWorkOrderStatus,
   addStageComment,
   updateCustomerWaiting,
-  updateWashNeeded,
-  updateAlignmentNeeded,
-  updateDiagnosisNeeded,
 } from '../../api/workOrders.js';
+import { listTechnicians } from '../../api/technicians.js';
 import { getStages, STAGE_LABEL } from '../../constants/stages.js';
 import OrderTypeSelector from './OrderTypeSelector.jsx';
 import PendingPartsButton from './PendingPartsButton.jsx';
-import InlineCheckbox from './InlineCheckbox.jsx';
 import StageCommentsModal from './StageCommentsModal.jsx';
 import ExpedienteChecklist from '../insurance/ExpedienteChecklist.jsx';
-import ServiceCategorySelector from './ServiceCategorySelector.jsx';
+import WorkOrderOperationsManager from './WorkOrderOperationsManager.jsx';
 import { computeWorkProgress, PROGRESS_DOT_CLASS, PROGRESS_LEVELS } from '../../utils/workProgress.js';
 
 function formatDateTime(dateString) {
@@ -41,12 +38,17 @@ function StageCard({
   extra,
   elevated,
   progress,
+  blocked,
+  blockedReason,
+  actionLabel,
 }) {
   const percent = reached ? 100 : 0;
   const commentCount = (event?.note ? 1 : 0) + comments.length;
 
   const baseBorder = current
     ? 'border-2 border-emerald-500 bg-emerald-50/90 shadow-md ring-2 ring-emerald-300'
+    : blocked
+    ? 'border-amber-300 bg-amber-50/40 opacity-85'
     : reached
     ? 'border-emerald-300/80 bg-emerald-50/30'
     : 'border-outline-variant bg-surface-container-low opacity-85 hover:opacity-100 hover:border-primary/50';
@@ -67,6 +69,13 @@ function StageCard({
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 font-label-caps text-[9px] font-extrabold text-white shadow-xs">
               <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
               ACTUAL
+            </span>
+          ) : blocked ? (
+            <span
+              className="inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 font-label-caps text-[9px] font-bold text-amber-900 border border-amber-300"
+              title={blockedReason}
+            >
+              BLOQUEADO
             </span>
           ) : reached ? (
             <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 font-label-caps text-[9px] font-bold text-emerald-800">
@@ -131,14 +140,25 @@ function StageCard({
       {/* Botones de acción en la tarjeta */}
       <div className="w-full mt-1 space-y-1.5">
         {!current ? (
-          <button
-            type="button"
-            onClick={() => onSelectStage(stage.key)}
-            className="w-full rounded-md bg-white border border-outline-variant px-2 py-1 font-label-caps text-[10px] font-bold text-primary hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-800 transition-all cursor-pointer shadow-2xs"
-            title={`Mover orden a ${stage.label}`}
-          >
-            ⚡ Mover aquí
-          </button>
+          blocked ? (
+            <button
+              type="button"
+              onClick={() => onSelectStage(stage.key)}
+              className="w-full rounded-md bg-amber-100/80 border border-amber-300 px-2 py-1 font-label-caps text-[9.5px] font-extrabold text-amber-900 hover:bg-amber-200 transition-all cursor-pointer shadow-2xs"
+              title={blockedReason}
+            >
+              🚫 Requiere Taller
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onSelectStage(stage.key)}
+              className="w-full rounded-md bg-white border border-outline-variant px-2 py-1 font-label-caps text-[10px] font-bold text-primary hover:border-emerald-600 hover:bg-emerald-50 hover:text-emerald-800 transition-all cursor-pointer shadow-2xs"
+              title={`Mover orden a ${stage.label}`}
+            >
+              {actionLabel || '⚡ Mover aquí'}
+            </button>
+          )
         ) : (
           <div className="w-full py-1 text-center font-label-caps text-[10px] font-bold text-emerald-700 bg-emerald-100/60 rounded">
             🟢 En Proceso
@@ -182,7 +202,13 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
   const [saving, setSaving] = useState(false);
   const [partsPopoverOpen, setPartsPopoverOpen] = useState(false);
   const [commentsModalStage, setCommentsModalStage] = useState(null);
-  const [showTargetWorkshop, setShowTargetWorkshop] = useState(false);
+  const [technicians, setTechnicians] = useState([]);
+
+  useEffect(() => {
+    listTechnicians()
+      .then((data) => setTechnicians(data || []))
+      .catch(() => {});
+  }, []);
 
   // Comentarios en línea dentro del modal
   const [newModalComment, setNewModalComment] = useState('');
@@ -201,29 +227,42 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
     }
   }
 
-  async function handleQuickAdvanceNext() {
-    if (!nextStage) return;
-    setPendingStage(nextStage.key);
-  }
-
   async function handleToggleCustomerWaiting(value) {
     onUpdated?.(await updateCustomerWaiting(workOrder.id, value));
   }
 
-  async function handleToggleWash(val) {
-    onUpdated?.(await updateWashNeeded(workOrder.id, val));
-  }
-
-  async function handleToggleAlignment(val) {
-    onUpdated?.(await updateAlignmentNeeded(workOrder.id, val));
-  }
-
-  async function handleToggleDiagnosis(val) {
-    onUpdated?.(await updateDiagnosisNeeded(workOrder.id, val));
-  }
+  const hasOperations = workOrder.operations && workOrder.operations.length > 0;
+  const operationsHours = hasOperations
+    ? workOrder.operations.reduce((sum, op) => sum + (op.standardHours || 0), 0)
+    : 0;
 
   const categoryHours = standardHours?.[workOrder.serviceCategory] ?? 1.5;
-  const mechHours = categoryHours + (workOrder.alignmentNeeded ? 0.5 : 0);
+  const mechHours = hasOperations ? operationsHours : (categoryHours + (workOrder.alignmentNeeded ? 0.5 : 0));
+
+  const hasWashOp = workOrder.operations?.some(
+    (op) => (op.description && /lavad|est[ée]tica/i.test(op.description)) || (op.code && /lav/i.test(op.code))
+  );
+  const isWashNeeded = hasOperations ? hasWashOp : workOrder.washNeeded !== false;
+
+  const hasDiagOp = workOrder.operations?.some(
+    (op) => (op.description && /diagn[oó]stic|falla|revisi[oó]n/i.test(op.description)) || (op.code && /diag/i.test(op.code))
+  );
+  const isDiagnosisNeeded = Boolean(workOrder.diagnosisNeeded) || Boolean(hasDiagOp);
+
+  function handleSelectStage(stageKey) {
+    const hasPassedWorkshop =
+      workOrder.status === 'EN_TALLER' ||
+      statusEvents.some((e) => e.status === 'EN_TALLER');
+
+    if (stageKey === 'LAVADO' && isDiagnosisNeeded && !hasPassedWorkshop) {
+      alert(
+        '⚠️ Restricción activa de Calidad:\n\nLa unidad reporta falla o diagnóstico pendiente. Por protocolo de calidad debe ingresar primero a Taller antes de pasar a Lavado.'
+      );
+      return;
+    }
+    setPendingStage(stageKey);
+  }
+
   const isWashCompleted =
     ['CONTROL_CALIDAD', 'TERMINADO', 'ENTREGADO'].includes(workOrder.status) ||
     statusEvents.some((e) => e.status === 'LAVADO' && workOrder.status !== 'LAVADO');
@@ -233,7 +272,7 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
     const deliveryDate = new Date(workOrder.estimatedDeliveryAt);
     const bufferMs = 30 * 60 * 1000;
     const washMs =
-      workOrder.washNeeded !== false && !isWashCompleted && workOrder.status !== 'LAVADO' ? 90 * 60 * 1000 : 0;
+      isWashNeeded && !isWashCompleted && workOrder.status !== 'LAVADO' ? 90 * 60 * 1000 : 0;
     targetWorkshopDate = new Date(deliveryDate.getTime() - bufferMs - washMs);
   }
 
@@ -343,51 +382,6 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
               </div>
             ) : (
               <>
-                {/* BARRA DE ACCIÓN RÁPIDA DE ESTATUS (DISEÑO NEUTRO PARA RESALTAR EL PIPELINE) */}
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-outline-variant/80 bg-surface-container-low/60 p-3.5">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary font-black text-sm">
-                      <span className="material-symbols-outlined text-xl">alt_route</span>
-                    </span>
-                    <div>
-                      <p className="font-label-caps text-[10px] text-on-surface-variant font-bold uppercase">
-                        Estado Actual de la Orden
-                      </p>
-                      <h3 className="font-headline-md text-base font-bold text-primary flex items-center gap-2">
-                        {STAGE_LABEL[workOrder.status] || workOrder.status}
-                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-extrabold text-primary">
-                          Paso {currentIndex + 1} de {STAGES.length}
-                        </span>
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {nextStage && (
-                      <button
-                        type="button"
-                        onClick={handleQuickAdvanceNext}
-                        className="flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 font-label-caps text-xs font-bold text-white shadow-2xs hover:bg-primary/90 transition-all cursor-pointer"
-                        title={`Avanzar a ${nextStage.label}`}
-                      >
-                        <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                        Avanzar a: {nextStage.label}
-                      </button>
-                    )}
-
-                    <label className="flex items-center gap-1.5 cursor-pointer bg-white px-3 py-1.5 rounded-xl border border-outline-variant">
-                      <InlineCheckbox
-                        checked={workOrder.customerWaiting}
-                        onToggle={handleToggleCustomerWaiting}
-                        title="Cliente espera en agencia"
-                      />
-                      <span className="font-label-caps text-[11px] font-bold text-on-surface-variant">
-                        Espera en agencia
-                      </span>
-                    </label>
-                  </div>
-                </div>
-
                 {/* CONFIGURACIÓN DE SERVICIOS Y RUTA CRÍTICA DE ENTREGA */}
                 <div className="rounded-xl border border-outline-variant bg-surface-container-low/40 p-2.5 space-y-2">
                   <div className="flex items-center justify-between">
@@ -396,81 +390,8 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
                     </h4>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                    {/* 1. Selector de Tipo de Servicio (MO) con toggle para meta de taller */}
-                    <div className="flex flex-col gap-1 rounded-lg border border-outline-variant bg-white p-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowTargetWorkshop((v) => !v)}
-                        className="flex items-center justify-between w-full text-left font-label-caps text-[10px] font-bold text-on-surface-variant uppercase hover:text-primary transition-colors cursor-pointer"
-                        title="Clic para ver u ocultar la meta de salida de taller"
-                      >
-                        <span>1. Servicio Base</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded transition-colors ${
-                          showTargetWorkshop ? 'bg-primary text-white' : 'bg-primary/10 text-primary'
-                        }`}>
-                          {showTargetWorkshop ? '▲ Ocultar meta' : '▼ Ver meta'}
-                        </span>
-                      </button>
-                      <div className="pt-0.5">
-                        <ServiceCategorySelector workOrder={workOrder} onUpdated={onUpdated} />
-                      </div>
-                    </div>
-
-                    {/* 2. Lavado Toggle */}
-                    <div className="flex items-center justify-between gap-2 rounded-lg border border-outline-variant bg-white p-2">
-                      <div className="min-w-0">
-                        <span className="font-label-caps text-[10px] font-bold text-on-surface-variant uppercase block">
-                          2. Lavado (1.5 h)
-                        </span>
-                        <span className={`text-[10px] font-semibold truncate block ${workOrder.washNeeded !== false ? (isWashCompleted ? 'text-emerald-700' : 'text-primary') : 'text-on-surface-variant'}`}>
-                          {workOrder.washNeeded === false ? 'No requiere' : isWashCompleted ? '✓ Realizado' : 'Pendiente (1.5h)'}
-                        </span>
-                      </div>
-                      <InlineCheckbox
-                        checked={workOrder.washNeeded !== false}
-                        onToggle={handleToggleWash}
-                        title="Alternar necesidad de lavado"
-                      />
-                    </div>
-
-                    {/* 3. Alineación Toggle */}
-                    <div className="flex items-center justify-between gap-2 rounded-lg border border-outline-variant bg-white p-2">
-                      <div className="min-w-0">
-                        <span className="font-label-caps text-[10px] font-bold text-on-surface-variant uppercase block">
-                          3. Alineación (+0.5 h)
-                        </span>
-                        <span className={`text-[10px] font-semibold truncate block ${workOrder.alignmentNeeded ? 'text-purple-700' : 'text-on-surface-variant'}`}>
-                          {workOrder.alignmentNeeded ? '+30m taller' : 'No requiere'}
-                        </span>
-                      </div>
-                      <InlineCheckbox
-                        checked={!!workOrder.alignmentNeeded}
-                        onToggle={handleToggleAlignment}
-                        title="Alternar necesidad de alineación"
-                      />
-                    </div>
-
-                    {/* 4. Falla / Diagnóstico Toggle */}
-                    <div className="flex items-center justify-between gap-2 rounded-lg border border-outline-variant bg-white p-2">
-                      <div className="min-w-0">
-                        <span className="font-label-caps text-[10px] font-bold text-on-surface-variant uppercase block">
-                          4. Falla / Diagnóstico
-                        </span>
-                        <span className={`text-[10px] font-semibold truncate block ${workOrder.diagnosisNeeded ? 'text-amber-800' : 'text-on-surface-variant'}`}>
-                          {workOrder.diagnosisNeeded ? '⚠️ Falla' : 'Sin fallas'}
-                        </span>
-                      </div>
-                      <InlineCheckbox
-                        checked={!!workOrder.diagnosisNeeded}
-                        onToggle={handleToggleDiagnosis}
-                        title="Marcar si el auto tiene falla reportada (impide lavar antes de taller)"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Resumen desplegable de Meta de Salida de Taller (solo visible al dar clic en 1. Servicio Base) */}
-                  {showTargetWorkshop && targetWorkshopDate && (
+                  {/* Resumen de Meta de Salida de Taller */}
+                  {targetWorkshopDate && (
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-300 bg-emerald-50/80 px-3 py-1.5 text-xs text-primary animate-in fade-in duration-150">
                       <div className="flex items-center gap-2">
                         <span className="font-label-caps text-[10px] font-bold uppercase text-emerald-900">
@@ -480,20 +401,28 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
                           {targetWorkshopDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
                         </strong>
                         <span className="text-[10px] text-on-surface-variant font-medium">
-                          (Promesa: {new Date(workOrder.estimatedDeliveryAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} - {workOrder.washNeeded !== false && !isWashCompleted ? '2.0h' : '30m'})
+                          (Promesa de Entrega: {new Date(workOrder.estimatedDeliveryAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })})
                         </span>
                       </div>
                       <div className="text-[10px] text-on-surface-variant font-medium">
-                        Taller: {mechHours.toFixed(1)}h • Lavado: {workOrder.washNeeded !== false ? '1.5h' : '0h'} • Colchón: 30 min
+                        Carga taller: {mechHours.toFixed(1)}h • Colchón entrega: 30 min
                       </div>
                     </div>
                   )}
 
+                  {/* Gestor dinámico de operaciones y técnicos por tarea */}
+                  <WorkOrderOperationsManager
+                    workOrder={workOrder}
+                    technicians={technicians}
+                    onUpdated={onUpdated}
+                    onToggleCustomerWaiting={handleToggleCustomerWaiting}
+                  />
+
                   {/* Reglas de Flujo y Restricción */}
-                  {workOrder.diagnosisNeeded ? (
+                  {isDiagnosisNeeded ? (
                     <div className="flex items-center gap-1.5 text-xs text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-300">
                       <span className="font-medium text-[10.5px]">
-                        ⚠️ <strong>Restricción activa:</strong> La unidad reporta falla; debe ingresar a <strong>Taller primero</strong> para diagnóstico antes de pasar a Lavado.
+                        ⚠️ <strong>Restricción activa:</strong> La unidad reporta falla o diagnóstico; debe ingresar a <strong>Taller primero</strong> para atención antes de pasar a Lavado.
                       </span>
                     </div>
                   ) : (
@@ -560,11 +489,34 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
                     {STAGES.map((stage, index) => {
                       const event = statusEvents.find((e) => e.status === stage.key);
                       const comments = stageComments.filter((c) => c.stage === stage.key);
-                      const reached = index <= currentIndex;
                       const current = index === currentIndex;
                       const eventTimeIndex = event ? eventsByTime.indexOf(event) : -1;
                       const endAt = event && !current ? eventsByTime[eventTimeIndex + 1]?.occurredAt : null;
                       const align = index === 0 ? 'left' : index === STAGES.length - 1 ? 'right' : 'center';
+
+                      const hasPassedWorkshop =
+                        workOrder.status === 'EN_TALLER' ||
+                        statusEvents.some((e) => e.status === 'EN_TALLER');
+
+                      // Si se saltó a LAVADO primero (flujo flexible), EN_TALLER no se marca como HECHO sino PENDIENTE
+                      const isEnTallerPendingAfterWash =
+                        stage.key === 'EN_TALLER' && workOrder.status === 'LAVADO' && !hasPassedWorkshop;
+                      const reached = isEnTallerPendingAfterWash ? false : index <= currentIndex;
+
+                      // Restricción: No puede pasar a LAVADO si reporta diagnóstico/falla y no ha pasado por taller
+                      const isLavadoBlocked =
+                        stage.key === 'LAVADO' && isDiagnosisNeeded && !hasPassedWorkshop;
+
+                      let actionLabel = '⚡ Mover aquí';
+                      if (stage.key === 'EN_TALLER' && workOrder.status === 'LAVADO') {
+                        actionLabel = '⚡ Pasar a Taller';
+                      } else if (stage.key === 'LAVADO' && workOrder.status === 'EN_TALLER') {
+                        actionLabel = '⚡ Pasar a Lavado';
+                      } else if (stage.key === 'LAVADO' && workOrder.status === 'RECIBIDO') {
+                        actionLabel = '⚡ Lavar primero';
+                      } else if (stage.key === 'CONTROL_CALIDAD' && workOrder.status === 'EN_TALLER') {
+                        actionLabel = '⚡ Pasar a Calidad';
+                      }
 
                       let extra = null;
                       if (stage.key === 'RECIBIDO' && workOrder.status === 'RECIBIDO' && !workOrder.technicianId) {
@@ -604,7 +556,10 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
                           extra={extra}
                           progress={current ? progress : null}
                           elevated={stage.key === 'EN_TALLER' && partsPopoverOpen}
-                          onSelectStage={(key) => setPendingStage(key)}
+                          blocked={isLavadoBlocked}
+                          blockedReason="La unidad reporta falla o diagnóstico pendiente. Debe ingresar primero a Taller antes de pasar a Lavado."
+                          actionLabel={actionLabel}
+                          onSelectStage={handleSelectStage}
                           onOpenComments={() => setCommentsModalStage(stage)}
                         />
                       );

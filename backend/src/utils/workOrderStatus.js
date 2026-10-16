@@ -39,6 +39,13 @@ function statusIndex(orderType, status) {
 }
 
 function isForwardTransition(orderType, from, to) {
+  // En órdenes de SERVICIO se permite flujo flexible bidireccional entre EN_TALLER y LAVADO:
+  // Si la unidad pasó a LAVADO primero (por lavadores libres), debe poder pasar a EN_TALLER para sus trabajos mecánicos.
+  if (orderType === 'SERVICIO') {
+    if (from === 'LAVADO' && to === 'EN_TALLER') {
+      return true;
+    }
+  }
   return statusIndex(orderType, to) > statusIndex(orderType, from);
 }
 

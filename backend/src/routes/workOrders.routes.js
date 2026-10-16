@@ -23,6 +23,7 @@ router.get('/capacity/:team', controller.getCapacity);
 router.get('/reports/stage-durations', controller.getStageDurationsReport);
 router.get('/reports/pending-parts', controller.getPendingPartsReport);
 router.get('/reports/executive-kpis', controller.getExecutiveKpisReport);
+router.get('/reports/productivity', controller.getProductivityReport);
 router.get('/:id', controller.getOne);
 router.post('/', controller.create);
 router.patch('/:id/status', controller.updateStatus);
@@ -40,6 +41,7 @@ router.patch('/:id/alignment-needed', controller.updateAlignmentNeeded);
 router.patch('/:id/insurer', controller.updateInsurer);
 router.patch('/:id/report-number', controller.updateReportNumber);
 router.patch('/:id/technician', controller.updateTechnician);
+router.patch('/:id/washer', controller.updateWasher);
 router.patch('/:id/estimated-delivery', controller.updateEstimatedDelivery);
 router.post('/:id/comments', controller.addStageComment);
 

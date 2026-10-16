@@ -235,7 +235,12 @@ function normalizeDmsRow(row) {
  * Importa o actualiza una lista de filas en la base de datos.
  */
 async function processDmsRows(rawRows, options = {}) {
-  const { cleanPreviousDemos = false, agency = null } = options;
+  const {
+    cleanPreviousDemos = false,
+    agency = null,
+    completeMissingOrders = true,
+    orderType = 'SERVICIO',
+  } = options;
 
   if (cleanPreviousDemos) {
     await clearDemoOrders();
@@ -244,10 +249,12 @@ async function processDmsRows(rawRows, options = {}) {
   let createdCount = 0;
   let updatedCount = 0;
   const processedOrders = [];
+  const incomingOrderNumbers = new Set();
 
   for (const raw of rawRows) {
     const row = normalizeDmsRow(raw);
     if (!row) continue;
+    incomingOrderNumbers.add(row.orderNumber);
 
     const customer = await findOrCreateCustomer(row.clienteRaw);
     const { brand, model } = resolveBrandAndModel(row.linea);
@@ -348,12 +355,134 @@ async function processDmsRows(rawRows, options = {}) {
     }
   }
 
+  // Si completeMissingOrders está activo y se importaron órdenes válidas:
+  // Marcar como TERMINADO todas las órdenes activas del mismo ámbito (agencia / tipo)
+  // que ya no aparecen en el archivo importado, pues salieron del proceso en el DMS.
+  let completedMissingCount = 0;
+  const completedMissingList = [];
+
+  if (completeMissingOrders && incomingOrderNumbers.size > 0) {
+    const whereFilter = {
+      orderType: orderType || 'SERVICIO',
+      status: { notIn: ['TERMINADO', 'ENTREGADO'] },
+      orderNumber: { notIn: Array.from(incomingOrderNumbers) },
+      NOT: { orderNumber: { startsWith: 'WO-' } },
+    };
+    if (agency) {
+      whereFilter.agency = agency;
+    }
+
+    const missingOrders = await prisma.workOrder.findMany({
+      where: whereFilter,
+      select: { id: true, orderNumber: true, status: true },
+    });
+
+    for (const order of missingOrders) {
+      await prisma.workOrder.update({
+        where: { id: order.id },
+        data: {
+          status: 'TERMINADO',
+          subState: null,
+          statusEvents: {
+            create: {
+              status: 'TERMINADO',
+              note: 'Concluido en DMS (no presente en última exportación de órdenes activas)',
+            },
+          },
+        },
+      });
+      completedMissingCount++;
+      completedMissingList.push(order.orderNumber);
+    }
+  }
+
   return {
     success: true,
     totalProcessed: processedOrders.length,
     created: createdCount,
     updated: updatedCount,
+    completedMissing: completedMissingCount,
+    completedMissingOrders: completedMissingList,
     orders: processedOrders,
+  };
+}
+
+/**
+ * Previsualiza el impacto de una sincronización DMS:
+ * - Cuántas órdenes del archivo son nuevas (crear).
+ * - Cuántas son existentes (actualizar).
+ * - Cuáles órdenes actualmente activas en la BD NO vienen en el archivo (pasarán a TERMINADO).
+ */
+async function previewDmsSync(rawOrderNumbers, options = {}) {
+  const { agency = null, orderType = 'SERVICIO' } = options;
+  if (!Array.isArray(rawOrderNumbers)) {
+    return {
+      totalIncoming: 0,
+      toCreate: 0,
+      toUpdate: 0,
+      missingActiveOrders: [],
+    };
+  }
+
+  const normalizedList = rawOrderNumbers
+    .map((n) => normalizeOrderNumber(n))
+    .filter(Boolean);
+  const incomingSet = new Set(normalizedList);
+
+  if (incomingSet.size === 0) {
+    return {
+      totalIncoming: 0,
+      toCreate: 0,
+      toUpdate: 0,
+      missingActiveOrders: [],
+    };
+  }
+
+  const existingIncoming = await prisma.workOrder.findMany({
+    where: { orderNumber: { in: Array.from(incomingSet) } },
+    select: { orderNumber: true },
+  });
+  const existingSet = new Set(existingIncoming.map((o) => o.orderNumber));
+  const toCreate = incomingSet.size - existingSet.size;
+  const toUpdate = existingSet.size;
+
+  const whereFilter = {
+    orderType: orderType || 'SERVICIO',
+    status: { notIn: ['TERMINADO', 'ENTREGADO'] },
+    orderNumber: { notIn: Array.from(incomingSet) },
+    NOT: { orderNumber: { startsWith: 'WO-' } },
+  };
+  if (agency) {
+    whereFilter.agency = agency;
+  }
+
+  const missingActiveOrders = await prisma.workOrder.findMany({
+    where: whereFilter,
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      agency: true,
+      vehicle: {
+        select: { brand: true, model: true, plate: true, year: true },
+      },
+    },
+    orderBy: { orderNumber: 'asc' },
+  });
+
+  return {
+    totalIncoming: incomingSet.size,
+    toCreate,
+    toUpdate,
+    missingActiveOrders: missingActiveOrders.map((o) => ({
+      id: o.id,
+      orderNumber: o.orderNumber,
+      status: o.status,
+      agency: o.agency,
+      vehicle: o.vehicle
+        ? `${o.vehicle.brand} ${o.vehicle.model}${o.vehicle.plate ? ` (${o.vehicle.plate})` : ''}`
+        : null,
+    })),
   };
 }
 
@@ -393,7 +522,9 @@ async function clearDemoOrders() {
 }
 
 module.exports = {
+  normalizeOrderNumber,
   normalizeDmsRow,
   processDmsRows,
+  previewDmsSync,
   clearDemoOrders,
 };

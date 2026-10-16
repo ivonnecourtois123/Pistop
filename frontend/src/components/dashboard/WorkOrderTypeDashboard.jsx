@@ -502,7 +502,10 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
           <MaintenanceQuoter />
         ) : activeMainTab === 'magnetoplano' ? (
           /* PESTAÑA 1: MAGNETOPLANO DE HORAS PROMESA / AGENDA HYP */
-          <div className="w-full space-y-6">
+          <div className="w-full space-y-4">
+            {orderType === 'SERVICIO' && (
+              <CapacityPanel team={orderType} refreshKey={capacityRefreshKey} />
+            )}
             {showPromiseBoard && (
               <PromiseTimeBoard
                 workOrders={filteredList}
@@ -600,6 +603,7 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
       <DmsImportModal
         isOpen={showDmsImportModal}
         onClose={() => setShowDmsImportModal(false)}
+        orderType={orderType}
         onImportSuccess={() => {
           handleOrderUpdated();
         }}

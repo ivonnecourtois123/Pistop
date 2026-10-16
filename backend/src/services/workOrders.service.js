@@ -5,6 +5,7 @@ const { isForwardTransition, getStageOrder, isValidSubState } = require('../util
 const INCLUDE_RELATIONS = {
   vehicle: { include: { customer: true } },
   technician: true,
+  washer: true,
   advisor: { select: { id: true, name: true } },
   statusEvents: { orderBy: { occurredAt: 'asc' } },
   stageComments: {
@@ -12,6 +13,13 @@ const INCLUDE_RELATIONS = {
     orderBy: { createdAt: 'asc' },
   },
   pendingParts: { orderBy: { createdAt: 'asc' } },
+  operations: {
+    include: {
+      technician: { select: { id: true, name: true, specialty: true } },
+      workshopOperation: true,
+    },
+    orderBy: { createdAt: 'asc' },
+  },
 };
 
 // Busca por número de orden, placas o VIN (los 3 modos del selector en el dashboard)
@@ -179,9 +187,36 @@ async function create(data, advisorId) {
 }
 
 async function updateStatus(id, nextStatus, note) {
-  const current = await prisma.workOrder.findUnique({ where: { id } });
+  const current = await prisma.workOrder.findUnique({
+    where: { id },
+    include: {
+      statusEvents: true,
+      operations: true,
+    },
+  });
   if (!current) {
     throw ApiError.notFound('Orden de trabajo no encontrada');
+  }
+
+  // Restricción de Calidad y Seguridad:
+  // Si la unidad reporta falla o diagnóstico activo, NO puede pasar a LAVADO sin haber ingresado a TALLER primero.
+  if (nextStatus === 'LAVADO' && current.orderType === 'SERVICIO') {
+    const hasDiagOp = current.operations?.some(
+      (op) =>
+        (op.description && /diagn[oó]stic|falla|revisi[oó]n/i.test(op.description)) ||
+        (op.code && /diag/i.test(op.code))
+    );
+    const isDiagnosisActive = Boolean(current.diagnosisNeeded) || Boolean(hasDiagOp);
+
+    const hasPassedWorkshop =
+      current.status === 'EN_TALLER' ||
+      current.statusEvents?.some((e) => e.status === 'EN_TALLER');
+
+    if (isDiagnosisActive && !hasPassedWorkshop) {
+      throw ApiError.badRequest(
+        'La unidad reporta falla o diagnóstico activo. Por protocolo de calidad debe ingresar primero a Taller antes de pasar a Lavado.'
+      );
+    }
   }
 
   if (!isForwardTransition(current.orderType, current.status, nextStatus)) {
@@ -470,6 +505,34 @@ async function updateTechnician(id, technicianId) {
   });
 }
 
+// washerId null desasigna al lavador.
+async function updateWasher(id, washerId) {
+  const existing = await prisma.workOrder.findUnique({ where: { id } });
+  if (!existing) {
+    throw ApiError.notFound('Orden de trabajo no encontrada');
+  }
+
+  if (washerId !== null) {
+    const washer = await prisma.technician.findUnique({ where: { id: washerId } });
+    if (!washer) {
+      throw ApiError.notFound('Lavador no encontrado');
+    }
+  }
+
+  const assignedAtChanged = washerId !== existing.washerId;
+  const washerAssignedAt = assignedAtChanged
+    ? washerId === null
+      ? null
+      : new Date()
+    : existing.washerAssignedAt;
+
+  return prisma.workOrder.update({
+    where: { id },
+    data: { washerId, washerAssignedAt },
+    include: INCLUDE_RELATIONS,
+  });
+}
+
 async function updateEstimatedDelivery(id, estimatedDeliveryAt) {
   const existing = await prisma.workOrder.findUnique({ where: { id } });
   if (!existing) {
@@ -527,6 +590,8 @@ async function statsToday(orderType) {
 // unidades simultáneas (técnicos × unitsPerTechnician) contra el conteo de órdenes HYP en proceso.
 async function capacityFor(team) {
   const today0 = startOfToday();
+  const today1 = new Date(today0);
+  today1.setDate(today1.getDate() + 1);
 
   const [settings, technicians, inProgress] = await Promise.all([
     prisma.capacitySettings.findUnique({ where: { team } }),
@@ -544,6 +609,14 @@ async function capacityFor(team) {
         status: true,
         washNeeded: true,
         alignmentNeeded: true,
+        operations: {
+          select: {
+            id: true,
+            standardHours: true,
+            technicianId: true,
+            completed: true,
+          },
+        },
       },
     }),
   ]);
@@ -613,10 +686,28 @@ async function capacityFor(team) {
   }
 
   for (const wo of inProgress) {
-    const isCarryover = wo.receivedAt && new Date(wo.receivedAt) < today0;
-    const hasCategory = wo.serviceCategory && hoursByCategory[wo.serviceCategory] != null;
+    const deliveryDate = wo.estimatedDeliveryAt ? new Date(wo.estimatedDeliveryAt) : null;
+    const isDeliveryToday = deliveryDate && deliveryDate >= today0 && deliveryDate < today1;
+    const isReceivedToday = wo.receivedAt && new Date(wo.receivedAt) >= today0;
+
+    // Solo se consideran órdenes cuya entrega está programada para HOY
+    // (o que fueron recibidas hoy sin fecha promesa definida aún)
+    const belongsToToday = isDeliveryToday || (!deliveryDate && isReceivedToday);
+    if (!belongsToToday) {
+      continue;
+    }
+
+    const isCarryover = !isReceivedToday;
     const alignmentHours = wo.alignmentNeeded ? 0.5 : 0;
-    const baseStdHours = hasCategory ? hoursByCategory[wo.serviceCategory] : null;
+    const hasOperations = wo.operations && wo.operations.length > 0;
+    const operationsHours = hasOperations
+      ? wo.operations.reduce((sum, op) => sum + (op.standardHours || 0), 0)
+      : 0;
+
+    const hasCategory = hasOperations || (wo.serviceCategory && hoursByCategory[wo.serviceCategory] != null);
+    const baseStdHours = hasOperations
+      ? operationsHours
+      : (wo.serviceCategory && hoursByCategory[wo.serviceCategory] != null ? hoursByCategory[wo.serviceCategory] : null);
     const stdHours = hasCategory ? (baseStdHours + alignmentHours) : null;
 
     if (hasCategory) {
@@ -637,8 +728,33 @@ async function capacityFor(team) {
       }
     }
 
-    // Carga asignada por técnico: siempre cuenta las órdenes y horas del técnico
-    if (wo.technicianId && techMap.has(wo.technicianId)) {
+    // Carga asignada por técnico:
+    // Si tiene operaciones con técnicos específicos, se acreditan individualmente
+    if (hasOperations) {
+      let anyAssigned = false;
+      for (const op of wo.operations) {
+        const assignedTechId = op.technicianId || wo.technicianId;
+        if (assignedTechId && techMap.has(assignedTechId)) {
+          anyAssigned = true;
+          const t = techMap.get(assignedTechId);
+          t.assignedHours += (op.standardHours || 0);
+          if (isCarryover) {
+            t.carryoverHours += (op.standardHours || 0);
+          } else {
+            t.todayHours += (op.standardHours || 0);
+          }
+        }
+      }
+      if (wo.technicianId && techMap.has(wo.technicianId)) {
+        const t = techMap.get(wo.technicianId);
+        t.ordersCount += 1;
+        if (alignmentHours > 0) {
+          t.assignedHours += alignmentHours;
+          if (isCarryover) t.carryoverHours += alignmentHours;
+          else t.todayHours += alignmentHours;
+        }
+      }
+    } else if (wo.technicianId && techMap.has(wo.technicianId)) {
       const t = techMap.get(wo.technicianId);
       const hoursToAssign = (hasCategory ? baseStdHours : defaultStandardHours) + alignmentHours;
 
@@ -650,8 +766,6 @@ async function capacityFor(team) {
         t.todayHours += hoursToAssign;
       }
 
-      // Si no tenía categoría clasificada pero ya está en proceso con técnico,
-      // se integra a la demanda total para mantener consistencia de balance
       if (!hasCategory) {
         demandHours += hoursToAssign;
         if (isCarryover) {
@@ -686,7 +800,12 @@ async function capacityFor(team) {
     if (wo.status === 'LAVADO') {
       activeWashUnits += 1;
     } else if (needsWash && !['CONTROL_CALIDAD', 'TERMINADO', 'ENTREGADO'].includes(wo.status)) {
-      pendingWashUnits += 1;
+      const deliveryDate = wo.estimatedDeliveryAt ? new Date(wo.estimatedDeliveryAt) : null;
+      const isDeliveryToday = deliveryDate && deliveryDate >= today0 && deliveryDate < today1;
+      const isReceivedToday = wo.receivedAt && new Date(wo.receivedAt) >= today0;
+      if (isDeliveryToday || (!deliveryDate && isReceivedToday)) {
+        pendingWashUnits += 1;
+      }
     }
   }
 
@@ -873,6 +992,7 @@ module.exports = {
   updateInsurer,
   updateReportNumber,
   updateTechnician,
+  updateWasher,
   updateEstimatedDelivery,
   addStageComment,
   statsToday,

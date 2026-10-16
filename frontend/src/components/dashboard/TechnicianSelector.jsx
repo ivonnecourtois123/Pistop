@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { updateWorkOrderTechnician } from '../../api/workOrders.js';
 import { listTechnicians } from '../../api/technicians.js';
 
-export default function TechnicianSelector({ workOrder, onUpdated }) {
+export default function TechnicianSelector({ workOrder, onUpdated, compact = false }) {
   const [open, setOpen] = useState(false);
   const [technicians, setTechnicians] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -46,22 +46,26 @@ export default function TechnicianSelector({ workOrder, onUpdated }) {
     }
   }
 
+  const techName = workOrder.technician?.name?.trim() || 'Sin técnico';
+
   return (
     <div className="relative" ref={containerRef} onClick={(e) => e.stopPropagation()}>
       <button
         type="button"
         onClick={handleOpen}
-        title="Cambiar técnico asignado"
-        className={`flex items-center gap-1 whitespace-nowrap rounded-full border px-3 py-1 font-label-caps text-[11px] transition-colors ${
+        title="Cambiar técnico mecánico asignado"
+        className={`flex items-center gap-1 whitespace-nowrap rounded-full border transition-colors cursor-pointer ${
+          compact ? 'px-2.5 py-0.5 font-label-caps text-[10px]' : 'px-3 py-1 font-label-caps text-[11px]'
+        } ${
           workOrder.technician
-            ? 'border-outline-variant text-primary hover:border-primary'
+            ? 'border-emerald-300 bg-emerald-50 text-emerald-900 font-bold hover:border-emerald-500'
             : 'border-dashed border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary'
         }`}
       >
         <span className="material-symbols-outlined text-xs" data-icon="engineering">
           engineering
         </span>
-        {workOrder.technician?.name?.trim() || 'Sin asignar'}
+        <span className={compact ? 'truncate max-w-[110px]' : ''}>{techName}</span>
       </button>
 
       {open && (

@@ -99,6 +99,11 @@ const technicianSchema = z.object({
   technicianId: z.union([z.null(), z.string().uuid()]),
 });
 
+// null desasigna al lavador
+const washerSchema = z.object({
+  washerId: z.union([z.null(), z.string().uuid()]),
+});
+
 // null limpia la fecha promesa; una fecha/hora la actualiza
 const estimatedDeliverySchema = z.object({
   estimatedDeliveryAt: z.union([z.null(), z.coerce.date()]),
@@ -228,6 +233,12 @@ async function updateReportNumber(req, res) {
 async function updateTechnician(req, res) {
   const { technicianId } = technicianSchema.parse(req.body);
   const workOrder = await workOrdersService.updateTechnician(req.params.id, technicianId);
+  res.json(workOrder);
+}
+
+async function updateWasher(req, res) {
+  const { washerId } = washerSchema.parse(req.body);
+  const workOrder = await workOrdersService.updateWasher(req.params.id, washerId);
   res.json(workOrder);
 }
 
@@ -366,6 +377,18 @@ async function getExecutiveKpisReport(req, res) {
   res.json(data);
 }
 
+async function getProductivityReport(req, res) {
+  const { orderType, period, startDate, endDate, agency } = req.query;
+  const data = await reportsService.productivityReport({
+    orderType: orderType || 'SERVICIO',
+    period: period || 'month',
+    startDate: startDate || null,
+    endDate: endDate || null,
+    agency: agency || null,
+  });
+  res.json(data);
+}
+
 module.exports = {
   list,
   getOne,
@@ -387,6 +410,7 @@ module.exports = {
   updateInsurer,
   updateReportNumber,
   updateTechnician,
+  updateWasher,
   updateEstimatedDelivery,
   addStageComment,
   stats,
@@ -403,5 +427,6 @@ module.exports = {
   getStageDurationsReport,
   getPendingPartsReport,
   getExecutiveKpisReport,
+  getProductivityReport,
 };
 

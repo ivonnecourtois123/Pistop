@@ -1,19 +1,67 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import { syncDmsRows, cleanDemoOrders } from '../../api/dmsSync.js';
+import { syncDmsRows, previewDmsSync, cleanDemoOrders } from '../../api/dmsSync.js';
 import { DEFAULT_AGENCIES, AGENCIES_BY_BRAND, getAgencyBrand } from '../../constants/immobilized.js';
 
-export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
+function extractOrderNumbers(rows) {
+  const set = new Set();
+  const prefixes = ['ORDEN', 'NO_ORDEN', 'NO. ORDEN', 'ORDER', 'OT', 'NUM_ORDEN', 'NUM ORDEN'];
+  for (const row of rows) {
+    if (!row) continue;
+    for (const key of Object.keys(row)) {
+      const cleanKey = key.trim().toUpperCase();
+      if (prefixes.some((p) => cleanKey === p || cleanKey.startsWith(p))) {
+        const val = row[key];
+        if (val != null) {
+          const digits = String(val).replace(/^'/, '').trim();
+          const parsed = parseInt(digits, 10);
+          if (!Number.isNaN(parsed)) {
+            set.add(String(parsed));
+          }
+        }
+        break;
+      }
+    }
+  }
+  return Array.from(set);
+}
+
+export default function DmsImportModal({ isOpen, onClose, onImportSuccess, orderType = 'SERVICIO' }) {
   const [file, setFile] = useState(null);
   const [parsedRows, setParsedRows] = useState([]);
   const [cleanDemos, setCleanDemos] = useState(true);
   const [assignAgency, setAssignAgency] = useState(true);
   const [selectedAgency, setSelectedAgency] = useState('San Cristóbal');
+  const [completeMissingOrders, setCompleteMissingOrders] = useState(true);
+  const [previewData, setPreviewData] = useState(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [showMissingModal, setShowMissingModal] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [resultMsg, setResultMsg] = useState(null);
   const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!parsedRows.length) {
+      setPreviewData(null);
+      return;
+    }
+    const orderNumbers = extractOrderNumbers(parsedRows);
+    if (!orderNumbers.length) {
+      setPreviewData(null);
+      return;
+    }
+    const agencyToAssign = assignAgency && selectedAgency ? selectedAgency : null;
+    setIsLoadingPreview(true);
+    previewDmsSync(orderNumbers, agencyToAssign, orderType)
+      .then(setPreviewData)
+      .catch((err) => {
+        console.error('Error previsualizando sync DMS:', err);
+        setPreviewData(null);
+      })
+      .finally(() => setIsLoadingPreview(false));
+  }, [parsedRows, assignAgency, selectedAgency, orderType]);
 
   if (!isOpen) return null;
 
@@ -68,10 +116,23 @@ export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
 
     try {
       const agencyToAssign = assignAgency && selectedAgency ? selectedAgency : null;
-      const res = await syncDmsRows(parsedRows, cleanDemos, agencyToAssign);
+      const res = await syncDmsRows(
+        parsedRows,
+        cleanDemos,
+        agencyToAssign,
+        completeMissingOrders,
+        orderType
+      );
+
+      let msg = `¡Sincronización exitosa! Se procesaron ${res.totalProcessed} órdenes (${res.created} nuevas creadas, ${res.updated} actualizadas)${agencyToAssign ? ` asignadas a ${agencyToAssign}` : ''}.`;
+      if (res.completedMissing > 0) {
+        msg += ` 🏁 Además, ${res.completedMissing} orden(es) activas que ya no estaban en el reporte del DMS se pasaron a TERMINADO.`;
+      }
+
       setResultMsg({
         success: true,
-        text: `¡Sincronización exitosa! Se procesaron ${res.totalProcessed} órdenes (${res.created} nuevas creadas, ${res.updated} actualizadas)${agencyToAssign ? ` asignadas a ${agencyToAssign}` : ''}.`,
+        text: msg,
+        completedList: res.completedMissingOrders || [],
       });
       if (onImportSuccess) {
         onImportSuccess();
@@ -218,6 +279,24 @@ export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
                 )}
               </div>
             </div>
+
+            {/* Opción de cierre automático de órdenes que ya no están en proceso en DMS */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-blue-50/70 border border-blue-200/90 text-xs">
+              <label className="flex items-start sm:items-center gap-2 cursor-pointer font-bold text-blue-950">
+                <input
+                  type="checkbox"
+                  checked={completeMissingOrders}
+                  onChange={(e) => setCompleteMissingOrders(e.target.checked)}
+                  className="mt-0.5 sm:mt-0 rounded border-blue-400 text-blue-700 focus:ring-blue-600 h-4 w-4 shrink-0"
+                />
+                <div>
+                  <span>Pasar a TERMINADO las órdenes activas que ya no aparezcan en este archivo</span>
+                  <p className="font-normal text-[11px] text-blue-800 mt-0.5">
+                    Si una orden estaba en proceso pero ya no figura en la exportación del DMS, significa que ya concluyó su estadía en taller.
+                  </p>
+                </div>
+              </label>
+            </div>
           </div>
 
           {/* Dropzone */}
@@ -250,6 +329,84 @@ export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
               </span>
             )}
           </div>
+
+          {/* Diagnóstico previo del impacto de la sincronización */}
+          {parsedRows.length > 0 && previewData && (
+            <div className="rounded-xl border border-outline-variant bg-surface-container-low/60 p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-label-caps text-[11px] uppercase font-bold text-slate-700 tracking-wider flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm text-primary">analytics</span>
+                  Diagnóstico previo de sincronización:
+                </span>
+                {isLoadingPreview && (
+                  <span className="text-[10px] text-slate-500 animate-pulse font-medium">Analizando base de datos...</span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-2 text-center">
+                  <p className="text-[10px] uppercase font-bold text-emerald-800">Nuevas en el sistema</p>
+                  <p className="font-data-mono text-base font-black text-emerald-900">+{previewData.toCreate}</p>
+                  <span className="text-[9px] text-emerald-700">Se registrarán</span>
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-white p-2 text-center">
+                  <p className="text-[10px] uppercase font-bold text-slate-700">Existentes a actualizar</p>
+                  <p className="font-data-mono text-base font-black text-primary">{previewData.toUpdate}</p>
+                  <span className="text-[9px] text-slate-500">Mantiene historial</span>
+                </div>
+
+                <div className={`rounded-lg border p-2 text-center transition-colors ${
+                  previewData.missingActiveOrders?.length > 0 && completeMissingOrders
+                    ? 'border-amber-300 bg-amber-50/90 text-amber-900'
+                    : 'border-slate-200 bg-white text-slate-700'
+                }`}>
+                  <p className="text-[10px] uppercase font-bold">
+                    {completeMissingOrders ? 'Pasarán a TERMINADO' : 'No en archivo (sin cambio)'}
+                  </p>
+                  <p className="font-data-mono text-base font-black">
+                    {previewData.missingActiveOrders?.length || 0}
+                  </p>
+                  {previewData.missingActiveOrders?.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowMissingModal((v) => !v)}
+                      className="text-[9px] font-bold text-amber-800 underline hover:text-amber-950 cursor-pointer"
+                    >
+                      {showMissingModal ? '▲ Ocultar lista' : '▼ Ver cuáles son'}
+                    </button>
+                  ) : (
+                    <span className="text-[9px] text-slate-500">Todas en el archivo</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Lista desplegable de órdenes que saldrán a TERMINADO */}
+              {showMissingModal && previewData.missingActiveOrders?.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-2.5 space-y-1.5 animate-in fade-in duration-150">
+                  <p className="font-label-caps text-[10px] font-bold text-amber-900">
+                    Órdenes activas en PitStop que no vienen en el archivo ({previewData.missingActiveOrders.length}):
+                  </p>
+                  <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
+                    {previewData.missingActiveOrders.map((o) => (
+                      <div
+                        key={o.id}
+                        className="flex items-center justify-between text-[11px] bg-white px-2 py-1 rounded border border-amber-200"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-data-mono font-bold text-primary">#OR: {o.orderNumber}</span>
+                          <span className="text-slate-600 truncate max-w-[220px]">{o.vehicle || 'Sin vehículo'}</span>
+                        </div>
+                        <span className="rounded bg-amber-100 text-amber-800 px-1.5 py-0.2 text-[9px] font-bold">
+                          {o.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Vista previa de las primeras 3 órdenes detectadas */}
           {parsedRows.length > 0 && (
@@ -350,7 +507,13 @@ export default function DmsImportModal({ isOpen, onClose, onImportSuccess }) {
             ) : (
               <>
                 <span className="material-symbols-outlined text-sm">cloud_sync</span>
-                <span>Alimentar Sistema ({parsedRows.length} órdenes)</span>
+                <span>
+                  Alimentar Sistema ({parsedRows.length} órdenes
+                  {completeMissingOrders && previewData?.missingActiveOrders?.length > 0
+                    ? ` + ${previewData.missingActiveOrders.length} a TERMINADO`
+                    : ''}
+                  )
+                </span>
               </>
             )}
           </button>

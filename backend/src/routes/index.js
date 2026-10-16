@@ -10,6 +10,7 @@ const usersRoutes = require('./users.routes');
 const immobilizedRoutes = require('./immobilized.routes');
 const insuranceCasesRoutes = require('./insuranceCases.routes');
 const dmsSyncRoutes = require('./dmsSync.routes');
+const workshopOperationsRoutes = require('./workshopOperations.routes');
 
 const router = Router();
 
@@ -25,5 +26,6 @@ router.use('/users', usersRoutes);
 router.use('/immobilized', immobilizedRoutes);
 router.use('/insurance-cases', insuranceCasesRoutes);
 router.use('/dms', dmsSyncRoutes);
+router.use('/workshop-operations', workshopOperationsRoutes);
 
 module.exports = router;

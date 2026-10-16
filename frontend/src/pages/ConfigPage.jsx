@@ -2,6 +2,7 @@ import TopNavBar from '../components/layout/TopNavBar.jsx';
 import UsersSection from '../components/config/UsersSection.jsx';
 import TechniciansSection from '../components/config/TechniciansSection.jsx';
 import CapacitySettingsSection from '../components/config/CapacitySettingsSection.jsx';
+import WorkshopOperationsSection from '../components/config/WorkshopOperationsSection.jsx';
 import StatusMappingsSection from '../components/config/StatusMappingsSection.jsx';
 
 export default function ConfigPage() {
@@ -13,6 +14,7 @@ export default function ConfigPage() {
         <h1 className="font-headline-lg text-headline-lg text-primary">Configuración</h1>
         <UsersSection />
         <TechniciansSection />
+        <WorkshopOperationsSection />
         <CapacitySettingsSection />
         <StatusMappingsSection />
       </main>

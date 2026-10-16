@@ -85,21 +85,33 @@ const NO_TIME_COLUMN = { key: 'none', label: 'Sin hora definida' };
 
 const WORKSHOP_DEFAULT_HOURS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
 
-// Matriz técnico × hora de entrega para el día seleccionado: filas = técnicos (con "Sin
-// asignar" al final), columnas = horas completas de jornada o solo horas con citas (+ "Sin hora definida").
-function buildMatrix(workOrders, selectedDate, onlyActiveHours = false) {
+function buildMatrix(workOrders, selectedDate, onlyActiveHours = false, trafficFilter = null, standardHours = {}) {
   const { withHour, noTime } = unitsForSelectedDate(workOrders, selectedDate);
 
-  const orderHours = withHour.map((wo) => new Date(wo.estimatedDeliveryAt).getHours());
+  let filteredWithHour = withHour;
+  let filteredNoTime = noTime;
+
+  if (trafficFilter) {
+    filteredWithHour = withHour.filter((wo) => {
+      const timing = computeDeliveryTiming(wo, standardHours);
+      return timing.statusTraffic === trafficFilter;
+    });
+    filteredNoTime = noTime.filter((wo) => {
+      const timing = computeDeliveryTiming(wo, standardHours);
+      return timing.statusTraffic === trafficFilter;
+    });
+  }
+
+  const orderHours = filteredWithHour.map((wo) => new Date(wo.estimatedDeliveryAt).getHours());
   const hoursList = onlyActiveHours && orderHours.length > 0
     ? [...new Set(orderHours)].sort((a, b) => a - b)
     : [...new Set([...WORKSHOP_DEFAULT_HOURS, ...orderHours])].sort((a, b) => a - b);
 
   const columns = hoursList.map((h) => ({ key: `hour-${h}`, hour: h, label: formatHour(h) }));
-  if (noTime.length) columns.push({ ...NO_TIME_COLUMN, count: noTime.length });
+  if (filteredNoTime.length) columns.push({ ...NO_TIME_COLUMN, count: filteredNoTime.length });
 
   const technicianNames = new Set();
-  for (const wo of [...withHour, ...noTime]) {
+  for (const wo of [...filteredWithHour, ...filteredNoTime]) {
     technicianNames.add(wo.technician?.name || 'Sin asignar');
   }
   const rows = [...technicianNames].sort((a, b) =>
@@ -148,8 +160,13 @@ function computeDeliveryTiming(workOrder, standardHours) {
     ['CONTROL_CALIDAD', 'TERMINADO', 'ENTREGADO'].includes(workOrder.status) ||
     statusEvents.some((e) => e.status === 'LAVADO' && workOrder.status !== 'LAVADO');
 
+  const hasOperations = workOrder.operations && workOrder.operations.length > 0;
+  const operationsHours = hasOperations
+    ? workOrder.operations.reduce((sum, op) => sum + (op.standardHours || 0), 0)
+    : 0;
+
   const categoryHours = standardHours?.[workOrder.serviceCategory] ?? 1.5;
-  const mechHours = categoryHours + (workOrder.alignmentNeeded ? 0.5 : 0);
+  const mechHours = (hasOperations ? operationsHours : categoryHours) + (workOrder.alignmentNeeded ? 0.5 : 0);
   const needsWash = workOrder.washNeeded !== false;
 
   let targetWorkshopDate = null;
@@ -345,6 +362,7 @@ function VehicleCard({ workOrder, standardHours, onSelect }) {
 export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, opStats }) {
   const [selectedDate, setSelectedDate] = useState(startOfToday);
   const [onlyActiveHours, setOnlyActiveHours] = useState(false);
+  const [trafficFilter, setTrafficFilter] = useState(null);
   const [capacity, setCapacity] = useState(null);
 
   useEffect(() => {
@@ -353,9 +371,39 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
       .catch(() => {});
   }, [workOrders]);
 
+  // Unidades programadas para la fecha seleccionada (base para los contadores del semáforo)
+  const allDateUnits = useMemo(() => {
+    const { withHour, noTime } = unitsForSelectedDate(workOrders, selectedDate);
+    return [...withHour, ...noTime];
+  }, [workOrders, selectedDate]);
+
+  // Estadísticas del semáforo de entrega de la fecha seleccionada
+  const trafficStats = useMemo(() => {
+    let ok = 0;
+    let warn = 0;
+    let late = 0;
+    let done = 0;
+
+    for (const wo of allDateUnits) {
+      const timing = computeDeliveryTiming(wo, standardHours);
+      if (timing.statusTraffic === 'DONE') done += 1;
+      else if (timing.statusTraffic === 'LATE') late += 1;
+      else if (timing.statusTraffic === 'WARN') warn += 1;
+      else ok += 1;
+    }
+
+    return {
+      total: allDateUnits.length,
+      ok,
+      warn,
+      late,
+      done,
+    };
+  }, [allDateUnits, standardHours]);
+
   const { rows, columns, cells } = useMemo(
-    () => buildMatrix(workOrders, selectedDate, onlyActiveHours),
-    [workOrders, selectedDate, onlyActiveHours]
+    () => buildMatrix(workOrders, selectedDate, onlyActiveHours, trafficFilter, standardHours),
+    [workOrders, selectedDate, onlyActiveHours, trafficFilter, standardHours]
   );
 
   const otherDays = useMemo(() => upcomingDaysWithOrders(workOrders, selectedDate), [workOrders, selectedDate]);
@@ -363,42 +411,28 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
   const isToday = isSameDay(selectedDate, startOfToday());
   const totalCount = [...cells.values()].reduce((sum, items) => sum + items.length, 0);
 
-  // Horas asignadas por cada técnico en el día seleccionado (incluye alineación si aplica)
+  // Horas asignadas por cada técnico en el día seleccionado (incluye operaciones específicas y alineación si aplica)
   const techHoursMap = useMemo(() => {
     const map = new Map();
     const { withHour, noTime } = unitsForSelectedDate(workOrders, selectedDate);
     for (const wo of [...withHour, ...noTime]) {
-      const name = wo.technician?.name || 'Sin asignar';
-      const baseStd = wo.serviceCategory && standardHours ? standardHours[wo.serviceCategory] : 1.5;
-      const std = baseStd + (wo.alignmentNeeded ? 0.5 : 0);
-      map.set(name, (map.get(name) || 0) + std);
+      if (wo.operations && wo.operations.length > 0) {
+        for (const op of wo.operations) {
+          const name = op.technician?.name || wo.technician?.name || 'Sin asignar';
+          map.set(name, (map.get(name) || 0) + (op.standardHours || 0));
+        }
+        if (wo.alignmentNeeded && wo.technician?.name) {
+          map.set(wo.technician.name, (map.get(wo.technician.name) || 0) + 0.5);
+        }
+      } else {
+        const name = wo.technician?.name || 'Sin asignar';
+        const baseStd = wo.serviceCategory && standardHours ? standardHours[wo.serviceCategory] : 1.5;
+        const std = baseStd + (wo.alignmentNeeded ? 0.5 : 0);
+        map.set(name, (map.get(name) || 0) + std);
+      }
     }
     return map;
   }, [workOrders, selectedDate, standardHours]);
-
-  // Indicadores operativos dinámicos para la barra
-  const computedOpStats = useMemo(() => {
-    const today0 = startOfToday();
-    const today1 = addDays(today0, 1);
-
-    const todayOrders = workOrders.filter((wo) => {
-      const rec = wo.receivedAt ? new Date(wo.receivedAt) : null;
-      const prom = wo.estimatedDeliveryAt ? new Date(wo.estimatedDeliveryAt) : null;
-      return (rec && rec >= today0 && rec < today1) || (prom && prom >= today0 && prom < today1);
-    });
-
-    const totalHoy = opStats?.totalHoy ?? (todayOrders.length || workOrders.length);
-    const terminados = opStats?.terminados ?? workOrders.filter((wo) => ['TERMINADO', 'ENTREGADO'].includes(wo.status)).length;
-    const porEntregar = opStats?.porEntregar ?? workOrders.filter((wo) => wo.status === 'TERMINADO' || (wo.status !== 'ENTREGADO' && !['RECIBIDO'].includes(wo.status))).length;
-
-    const rezagados = opStats?.rezagados ?? workOrders.filter((wo) => {
-      if (['TERMINADO', 'ENTREGADO'].includes(wo.status)) return false;
-      if (!wo.receivedAt) return false;
-      return new Date(wo.receivedAt) < today0;
-    }).length;
-
-    return { totalHoy, terminados, porEntregar, rezagados };
-  }, [workOrders, opStats]);
 
   return (
     <section className="w-full rounded-2xl border border-outline-variant bg-surface-container-lowest shadow-2xs">
@@ -462,27 +496,101 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
           </button>
         </div>
 
-        {/* Indicadores Operativos y Capacidad de MO en pills compactos */}
+        {/* Indicadores de Semáforo de Entrega y Capacidad de MO en pills interactivos */}
         <div className="flex flex-wrap items-center gap-1.5">
-          <div className="flex items-center gap-1 rounded-md border border-outline-variant bg-white px-2 py-0.5 shadow-2xs">
-            <span className="font-label-caps text-[9px] text-on-surface-variant font-bold">TOTAL:</span>
-            <span className="font-data-mono text-xs font-black text-primary">{computedOpStats.totalHoy}</span>
-          </div>
-          <div className="flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50/60 px-2 py-0.5 shadow-2xs">
-            <span className="font-label-caps text-[9px] text-emerald-800 font-bold">LISTAS:</span>
-            <span className="font-data-mono text-xs font-black text-emerald-700">{computedOpStats.terminados}</span>
-          </div>
-          <div className="flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50/60 px-2 py-0.5 shadow-2xs">
-            <span className="font-label-caps text-[9px] text-amber-800 font-bold">POR ENTREGAR:</span>
-            <span className="font-data-mono text-xs font-black text-amber-700">{computedOpStats.porEntregar}</span>
-          </div>
-          <div className="flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50/70 px-2 py-0.5 shadow-2xs ring-1 ring-rose-200">
-            <span className="font-label-caps text-[9px] text-rose-900 font-bold">REZAGADOS:</span>
-            <span className="font-data-mono text-xs font-black text-rose-800">{computedOpStats.rezagados}</span>
-          </div>
-          <span className="font-label-caps text-[10px] text-on-surface-variant/80 font-bold px-1">
-            ({totalCount} en vista)
-          </span>
+          {/* Total del día */}
+          <button
+            type="button"
+            onClick={() => setTrafficFilter(null)}
+            title="Ver todas las unidades de la fecha seleccionada"
+            className={`flex items-center gap-1 rounded-md border px-2 py-0.5 shadow-2xs transition-all cursor-pointer ${
+              trafficFilter === null
+                ? 'border-primary bg-primary/10 text-primary font-bold ring-1 ring-primary/40'
+                : 'border-outline-variant bg-white text-on-surface-variant hover:border-primary'
+            }`}
+          >
+            <span className="font-label-caps text-[9px] font-bold">TOTAL:</span>
+            <span className="font-data-mono text-xs font-black">{trafficStats.total}</span>
+          </button>
+
+          {/* En tiempo */}
+          <button
+            type="button"
+            onClick={() => setTrafficFilter((curr) => (curr === 'OK' ? null : 'OK'))}
+            title="Filtrar: En tiempo (verde). Clic de nuevo para quitar filtro."
+            className={`flex items-center gap-1.5 rounded-md border px-2 py-0.5 shadow-2xs transition-all cursor-pointer ${
+              trafficFilter === 'OK'
+                ? 'border-emerald-600 bg-emerald-100 text-emerald-950 ring-2 ring-emerald-500 font-bold'
+                : 'border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100/70'
+            }`}
+          >
+            <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block shadow-xs" />
+            <span className="font-label-caps text-[9px] font-bold">EN TIEMPO:</span>
+            <span className="font-data-mono text-xs font-black">{trafficStats.ok}</span>
+          </button>
+
+          {/* Por vencer / En riesgo */}
+          <button
+            type="button"
+            onClick={() => setTrafficFilter((curr) => (curr === 'WARN' ? null : 'WARN'))}
+            title="Filtrar: Por vencer / En riesgo (amarillo). Clic de nuevo para quitar filtro."
+            className={`flex items-center gap-1.5 rounded-md border px-2 py-0.5 shadow-2xs transition-all cursor-pointer ${
+              trafficFilter === 'WARN'
+                ? 'border-amber-600 bg-amber-100 text-amber-950 ring-2 ring-amber-500 font-bold'
+                : 'border-amber-200 bg-amber-50/70 text-amber-800 hover:bg-amber-100/70'
+            }`}
+          >
+            <span className="h-2 w-2 rounded-full bg-amber-500 inline-block shadow-xs" />
+            <span className="font-label-caps text-[9px] font-bold">POR VENCER / EN RIESGO:</span>
+            <span className="font-data-mono text-xs font-black">{trafficStats.warn}</span>
+          </button>
+
+          {/* Atrasado / Taller excedido */}
+          <button
+            type="button"
+            onClick={() => setTrafficFilter((curr) => (curr === 'LATE' ? null : 'LATE'))}
+            title="Filtrar: Atrasado / Taller excedido (rojo). Clic de nuevo para quitar filtro."
+            className={`flex items-center gap-1.5 rounded-md border px-2 py-0.5 shadow-2xs transition-all cursor-pointer ${
+              trafficFilter === 'LATE'
+                ? 'border-rose-600 bg-rose-100 text-rose-950 ring-2 ring-rose-500 font-bold'
+                : 'border-rose-200 bg-rose-50/80 text-rose-900 hover:bg-rose-100/80 ring-1 ring-rose-200'
+            }`}
+          >
+            <span className="h-2 w-2 rounded-full bg-rose-500 inline-block shadow-xs" />
+            <span className="font-label-caps text-[9px] font-bold">ATRASADO / EXCEDIDO:</span>
+            <span className="font-data-mono text-xs font-black">{trafficStats.late}</span>
+          </button>
+
+          {/* Listo */}
+          <button
+            type="button"
+            onClick={() => setTrafficFilter((curr) => (curr === 'DONE' ? null : 'DONE'))}
+            title="Filtrar: Listo para entrega (verde oscuro). Clic de nuevo para quitar filtro."
+            className={`flex items-center gap-1.5 rounded-md border px-2 py-0.5 shadow-2xs transition-all cursor-pointer ${
+              trafficFilter === 'DONE'
+                ? 'border-teal-600 bg-teal-100 text-teal-950 ring-2 ring-teal-500 font-bold'
+                : 'border-teal-200 bg-teal-50/70 text-teal-900 hover:bg-teal-100/70'
+            }`}
+          >
+            <span className="h-2 w-2 rounded-full bg-emerald-700 inline-block shadow-xs" />
+            <span className="font-label-caps text-[9px] font-bold">LISTO:</span>
+            <span className="font-data-mono text-xs font-black">{trafficStats.done}</span>
+          </button>
+
+          {trafficFilter ? (
+            <button
+              type="button"
+              onClick={() => setTrafficFilter(null)}
+              className="rounded-md bg-surface-container px-1.5 py-0.5 text-[9px] font-label-caps font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
+              title="Quitar filtro de semáforo"
+            >
+              ✕ Ver todos ({totalCount})
+            </button>
+          ) : (
+            <span className="font-label-caps text-[10px] text-on-surface-variant/80 font-bold px-1">
+              ({totalCount} en vista)
+            </span>
+          )}
 
           {/* DUAL CAPACITY PILLS: TÉCNICOS & LAVADORES */}
           {capacity && (
@@ -519,28 +627,11 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
         </div>
       </div>
 
-      {/* Sub-barra: Semáforo y Otros Días */}
+      {/* Sub-barra: Regla Operativa y Otros Días */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant/40 bg-surface-container/20 px-4 py-1.5 text-[10px] font-label-caps text-on-surface-variant">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="font-bold text-on-surface-variant">Semáforo de Entrega:</span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            En tiempo
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-amber-500" />
-            Por vencer / En riesgo
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-rose-500" />
-            Atrasado / Taller excedido
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-emerald-700" />
-            Listo
-          </span>
-          <span className="text-[9px] text-on-surface-variant/70 font-normal pl-2 border-l border-outline-variant/60 hidden md:inline">
-            💡 Regla: Entrega lista 30m antes • Lavado 1.5h • Meta taller = Promesa - 2h (o -30m si ya se lavó)
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1 text-[10px] text-on-surface-variant/80 font-normal">
+            💡 <strong className="font-bold">Ruta crítica:</strong> Entrega lista 30m antes • Lavado 1.5h • Meta taller = Promesa - 2h (o -30m si ya se lavó)
           </span>
         </div>
 

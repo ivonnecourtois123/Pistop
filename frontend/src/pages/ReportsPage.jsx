@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import TopNavBar from '../components/layout/TopNavBar.jsx';
 import ExecutiveKpiDashboard from '../components/reports/ExecutiveKpiDashboard.jsx';
+import ProductivityReport from '../components/reports/ProductivityReport.jsx';
 import StageDurationsReport from '../components/reports/StageDurationsReport.jsx';
 import CapacityDashboard from '../components/reports/CapacityDashboard.jsx';
 import { GROUP_BRANDS, DEFAULT_AGENCIES } from '../constants/immobilized.js';
 
 const REPORT_TABS = [
   { key: 'executive', label: 'Tablero Central KPIs', icon: 'dashboard' },
+  { key: 'productivity', label: 'Rendimiento (Técnicos & Lavadores)', icon: 'badge' },
   { key: 'tpe', label: 'TPE y Tiempos por Etapa', icon: 'timer' },
   { key: 'capacity', label: 'Capacidad Instalada MO', icon: 'engineering' },
 ];
@@ -29,7 +31,7 @@ export default function ReportsPage() {
             <div>
               <h1 className="font-headline-lg text-2xl font-black text-primary">Reportes y KPIs</h1>
               <p className="font-body-md text-xs text-on-surface-variant">
-                Métricas ejecutivas de taller, tiempos promedio (TPE), capacidad de mano de obra y refacciones.
+                Métricas ejecutivas de taller, rendimiento operativo de personal, tiempos promedio (TPE) y capacidad.
               </p>
             </div>
           </div>
@@ -77,7 +79,7 @@ export default function ReportsPage() {
               key={tab.key}
               type="button"
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 border-b-2 px-5 py-3 font-label-caps text-xs font-bold transition-colors ${
+              className={`flex items-center gap-2 border-b-2 px-5 py-3 font-label-caps text-xs font-bold transition-colors cursor-pointer ${
                 activeTab === tab.key
                   ? 'border-primary text-primary'
                   : 'border-transparent text-on-surface-variant hover:text-primary'
@@ -92,6 +94,9 @@ export default function ReportsPage() {
         {/* Contenido de la pestaña activa */}
         <div className="pt-2">
           {activeTab === 'executive' && <ExecutiveKpiDashboard />}
+          {activeTab === 'productivity' && (
+            <ProductivityReport agencyFilter={agencyFilter} brandFilter={brandFilter} />
+          )}
           {activeTab === 'tpe' && <StageDurationsReport />}
           {activeTab === 'capacity' && <CapacityDashboard />}
         </div>

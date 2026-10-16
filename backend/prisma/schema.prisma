@@ -87,7 +87,9 @@ model Technician {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  workOrders WorkOrder[]
+  workOrders       WorkOrder[] @relation("TechnicianWorkOrders")
+  washedWorkOrders WorkOrder[] @relation("WasherWorkOrders")
+  assignedOperations WorkOrderOperation[] @relation("OperationTechnician")
 
   @@map("technicians")
 }
@@ -116,6 +118,47 @@ model ServiceCategoryHours {
   hours    Float
 
   @@map("service_category_hours")
+}
+
+// Catálogo maestro de operaciones de taller con tiempos estándar para Coches y Camionetas
+model WorkshopOperation {
+  id          String   @id @default(uuid())
+  code        String   @unique // Id-Oper del DMS (ej. 1001, 1235, etc.)
+  description String   // Descripción de la operación
+  hoursCars   Float    @map("hours_cars") // Horas estándar para Coches (turismos/sedanes)
+  hoursTrucks Float    @map("hours_trucks") // Horas estándar para Camionetas (SUVs/Pickups)
+  category    String?  @default("MECANICA") // Clasificación opcional (MECANICA, LAVADO, ETC.)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workOrderOperations WorkOrderOperation[]
+
+  @@map("workshop_operations")
+}
+
+// Operaciones específicas agregadas a una orden de trabajo (con técnico asignado y estatus individual)
+model WorkOrderOperation {
+  id                  String             @id @default(uuid())
+  workOrderId         String             @map("work_order_id")
+  workOrder           WorkOrder          @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  operationId         String?            @map("operation_id")
+  workshopOperation   WorkshopOperation? @relation(fields: [operationId], references: [id], onDelete: SetNull)
+  code                String?            // Id-Oper (ej. 1235)
+  description         String             // Nombre de la operación
+  vehicleCategory     String             @default("COCHE") @map("vehicle_category") // COCHE | CAMIONETA
+  standardHours       Float              @map("standard_hours") // Horas calculadas para este trabajo
+  technicianId        String?            @map("technician_id")
+  technician          Technician?        @relation("OperationTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+  completed           Boolean            @default(false)
+  completedAt         DateTime?          @map("completed_at")
+  notes               String?
+  createdAt           DateTime           @default(now()) @map("created_at")
+  updatedAt           DateTime           @updatedAt @map("updated_at")
+
+  @@index([workOrderId])
+  @@index([technicianId])
+  @@map("work_order_operations")
 }
 
 model WorkOrder {
@@ -169,12 +212,16 @@ model WorkOrder {
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
 
   technicianId String?
-  technician   Technician? @relation(fields: [technicianId], references: [id], onDelete: SetNull)
+  technician   Technician? @relation("TechnicianWorkOrders", fields: [technicianId], references: [id], onDelete: SetNull)
   // Cuándo se asignó el técnico actual — el reloj del semáforo de avance (ver
   // utils/workProgress.js en el frontend) arranca aquí, no en `receivedAt`: el tiempo estándar
   // de una operación mide trabajo de taller, no la espera previa a que alguien la tome. Se
   // reinicia al reasignar a otro técnico, porque el trabajo efectivamente vuelve a empezar.
   technicianAssignedAt DateTime?
+
+  washerId     String?
+  washer       Technician? @relation("WasherWorkOrders", fields: [washerId], references: [id], onDelete: SetNull)
+  washerAssignedAt DateTime?
 
   advisorId String?
   advisor   User?   @relation("AdvisorWorkOrders", fields: [advisorId], references: [id], onDelete: SetNull)
@@ -182,6 +229,7 @@ model WorkOrder {
   statusEvents  StatusEvent[]
   stageComments StageComment[]
   pendingParts  PendingPart[]
+  operations    WorkOrderOperation[]
 
   @@index([status])
   @@index([receivedAt])

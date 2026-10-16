@@ -105,6 +105,12 @@ export async function updateWorkOrderTechnician(id, technicianIdOrNull) {
   return data;
 }
 
+// washerIdOrNull: el id del lavador, o null para desasignarlo
+export async function updateWorkOrderWasher(id, washerIdOrNull) {
+  const { data } = await apiClient.patch(`/work-orders/${id}/washer`, { washerId: washerIdOrNull });
+  return data;
+}
+
 // subStateOrNull: la clave del sub-estado, o null para quitarlo
 export async function updateWorkOrderSubState(id, subStateOrNull) {
   const { data } = await apiClient.patch(`/work-orders/${id}/sub-state`, { subState: subStateOrNull });
@@ -140,6 +146,11 @@ export async function getPendingPartsReport() {
 
 export async function getExecutiveKpisReport() {
   const { data } = await apiClient.get('/work-orders/reports/executive-kpis');
+  return data;
+}
+
+export async function getProductivityReport(params = {}) {
+  const { data } = await apiClient.get('/work-orders/reports/productivity', { params });
   return data;
 }
 

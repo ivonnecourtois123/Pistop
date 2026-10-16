@@ -50,22 +50,51 @@ export default function StatusSelector({ workOrder, onUpdated }) {
     <div className="relative" ref={containerRef} onClick={(e) => e.stopPropagation()}>
       <div className="flex items-center gap-1">
         {STEPS.map((step, idx) => {
-          const done = idx < currentIndex;
+          const hasDiagOp = workOrder.operations?.some(
+            (op) =>
+              (op.description && /diagn[oó]stic|falla|revisi[oó]n/i.test(op.description)) ||
+              (op.code && /diag/i.test(op.code))
+          );
+          const isDiagnosisActive = Boolean(workOrder.diagnosisNeeded) || Boolean(hasDiagOp);
+          const hasPassedWorkshop =
+            workOrder.status === 'EN_TALLER' ||
+            workOrder.statusEvents?.some((e) => e.status === 'EN_TALLER');
+
+          const isEnTallerPendingAfterWash =
+            step.value === 'EN_TALLER' && workOrder.status === 'LAVADO' && !hasPassedWorkshop;
+          const done = isEnTallerPendingAfterWash ? false : idx < currentIndex;
           const current = idx === currentIndex;
-          const clickable = idx > currentIndex;
+
+          const canGoToTallerFromLavado =
+            workOrder.status === 'LAVADO' && step.value === 'EN_TALLER';
+          const isBlockedByDiagnosis =
+            step.value === 'LAVADO' && isDiagnosisActive && !hasPassedWorkshop;
+
+          const clickable = (idx > currentIndex || canGoToTallerFromLavado) && !isBlockedByDiagnosis;
+
           return (
             <button
               key={step.value}
               type="button"
-              title={current ? `${step.label} (actual)` : step.label}
+              title={
+                isBlockedByDiagnosis
+                  ? 'Bloqueado: La unidad reporta falla o diagnóstico y debe ingresar primero a Taller'
+                  : current
+                  ? `${step.label} (actual)`
+                  : step.label
+              }
               disabled={!clickable}
               onClick={() => clickable && setPendingStatus(step.value)}
               className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all ${
-                done
+                isBlockedByDiagnosis
+                  ? 'bg-amber-100 text-amber-800 border border-amber-300 opacity-60 cursor-not-allowed'
+                  : done
                   ? 'bg-primary text-on-primary'
                   : current
                   ? 'border-2 border-secondary bg-white text-secondary'
-                  : 'bg-surface-container-high text-outline hover:bg-secondary-container/30 hover:text-secondary'
+                  : clickable
+                  ? 'bg-surface-container-high text-outline hover:bg-secondary-container/30 hover:text-secondary cursor-pointer'
+                  : 'bg-surface-container-low text-outline/50 cursor-not-allowed'
               }`}
             >
               <span
