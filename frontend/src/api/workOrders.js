@@ -83,6 +83,11 @@ export async function updateWashNeeded(id, washNeeded) {
   return data;
 }
 
+export async function updateAlignmentNeeded(id, alignmentNeeded) {
+  const { data } = await apiClient.patch(`/work-orders/${id}/alignment-needed`, { alignmentNeeded });
+  return data;
+}
+
 // insurerOrNull / reportNumberOrNull: null limpia el campo
 export async function updateInsurer(id, insurerOrNull) {
   const { data } = await apiClient.patch(`/work-orders/${id}/insurer`, { insurer: insurerOrNull });

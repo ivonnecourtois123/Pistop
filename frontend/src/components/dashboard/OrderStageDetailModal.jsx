@@ -1,11 +1,19 @@
 import { useState } from 'react';
-import { updateWorkOrderStatus, addStageComment, updateCustomerWaiting } from '../../api/workOrders.js';
+import {
+  updateWorkOrderStatus,
+  addStageComment,
+  updateCustomerWaiting,
+  updateWashNeeded,
+  updateAlignmentNeeded,
+  updateDiagnosisNeeded,
+} from '../../api/workOrders.js';
 import { getStages, STAGE_LABEL } from '../../constants/stages.js';
 import OrderTypeSelector from './OrderTypeSelector.jsx';
 import PendingPartsButton from './PendingPartsButton.jsx';
 import InlineCheckbox from './InlineCheckbox.jsx';
 import StageCommentsModal from './StageCommentsModal.jsx';
 import ExpedienteChecklist from '../insurance/ExpedienteChecklist.jsx';
+import ServiceCategorySelector from './ServiceCategorySelector.jsx';
 import { computeWorkProgress, PROGRESS_DOT_CLASS, PROGRESS_LEVELS } from '../../utils/workProgress.js';
 
 function formatDateTime(dateString) {
@@ -174,6 +182,7 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
   const [saving, setSaving] = useState(false);
   const [partsPopoverOpen, setPartsPopoverOpen] = useState(false);
   const [commentsModalStage, setCommentsModalStage] = useState(null);
+  const [showTargetWorkshop, setShowTargetWorkshop] = useState(false);
 
   // Comentarios en línea dentro del modal
   const [newModalComment, setNewModalComment] = useState('');
@@ -199,6 +208,33 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
 
   async function handleToggleCustomerWaiting(value) {
     onUpdated?.(await updateCustomerWaiting(workOrder.id, value));
+  }
+
+  async function handleToggleWash(val) {
+    onUpdated?.(await updateWashNeeded(workOrder.id, val));
+  }
+
+  async function handleToggleAlignment(val) {
+    onUpdated?.(await updateAlignmentNeeded(workOrder.id, val));
+  }
+
+  async function handleToggleDiagnosis(val) {
+    onUpdated?.(await updateDiagnosisNeeded(workOrder.id, val));
+  }
+
+  const categoryHours = standardHours?.[workOrder.serviceCategory] ?? 1.5;
+  const mechHours = categoryHours + (workOrder.alignmentNeeded ? 0.5 : 0);
+  const isWashCompleted =
+    ['CONTROL_CALIDAD', 'TERMINADO', 'ENTREGADO'].includes(workOrder.status) ||
+    statusEvents.some((e) => e.status === 'LAVADO' && workOrder.status !== 'LAVADO');
+
+  let targetWorkshopDate = null;
+  if (workOrder.estimatedDeliveryAt) {
+    const deliveryDate = new Date(workOrder.estimatedDeliveryAt);
+    const bufferMs = 30 * 60 * 1000;
+    const washMs =
+      workOrder.washNeeded !== false && !isWashCompleted && workOrder.status !== 'LAVADO' ? 90 * 60 * 1000 : 0;
+    targetWorkshopDate = new Date(deliveryDate.getTime() - bufferMs - washMs);
   }
 
   async function handleSaveComment(stageKey, commentText) {
@@ -350,6 +386,123 @@ export default function OrderStageDetailModal({ workOrder, onClose, onUpdated, s
                       </span>
                     </label>
                   </div>
+                </div>
+
+                {/* CONFIGURACIÓN DE SERVICIOS Y RUTA CRÍTICA DE ENTREGA */}
+                <div className="rounded-xl border border-outline-variant bg-surface-container-low/40 p-2.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-headline-md text-xs font-bold text-primary">
+                      Servicios Requeridos y Estimación de Tiempos
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    {/* 1. Selector de Tipo de Servicio (MO) con toggle para meta de taller */}
+                    <div className="flex flex-col gap-1 rounded-lg border border-outline-variant bg-white p-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowTargetWorkshop((v) => !v)}
+                        className="flex items-center justify-between w-full text-left font-label-caps text-[10px] font-bold text-on-surface-variant uppercase hover:text-primary transition-colors cursor-pointer"
+                        title="Clic para ver u ocultar la meta de salida de taller"
+                      >
+                        <span>1. Servicio Base</span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded transition-colors ${
+                          showTargetWorkshop ? 'bg-primary text-white' : 'bg-primary/10 text-primary'
+                        }`}>
+                          {showTargetWorkshop ? '▲ Ocultar meta' : '▼ Ver meta'}
+                        </span>
+                      </button>
+                      <div className="pt-0.5">
+                        <ServiceCategorySelector workOrder={workOrder} onUpdated={onUpdated} />
+                      </div>
+                    </div>
+
+                    {/* 2. Lavado Toggle */}
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-outline-variant bg-white p-2">
+                      <div className="min-w-0">
+                        <span className="font-label-caps text-[10px] font-bold text-on-surface-variant uppercase block">
+                          2. Lavado (1.5 h)
+                        </span>
+                        <span className={`text-[10px] font-semibold truncate block ${workOrder.washNeeded !== false ? (isWashCompleted ? 'text-emerald-700' : 'text-primary') : 'text-on-surface-variant'}`}>
+                          {workOrder.washNeeded === false ? 'No requiere' : isWashCompleted ? '✓ Realizado' : 'Pendiente (1.5h)'}
+                        </span>
+                      </div>
+                      <InlineCheckbox
+                        checked={workOrder.washNeeded !== false}
+                        onToggle={handleToggleWash}
+                        title="Alternar necesidad de lavado"
+                      />
+                    </div>
+
+                    {/* 3. Alineación Toggle */}
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-outline-variant bg-white p-2">
+                      <div className="min-w-0">
+                        <span className="font-label-caps text-[10px] font-bold text-on-surface-variant uppercase block">
+                          3. Alineación (+0.5 h)
+                        </span>
+                        <span className={`text-[10px] font-semibold truncate block ${workOrder.alignmentNeeded ? 'text-purple-700' : 'text-on-surface-variant'}`}>
+                          {workOrder.alignmentNeeded ? '+30m taller' : 'No requiere'}
+                        </span>
+                      </div>
+                      <InlineCheckbox
+                        checked={!!workOrder.alignmentNeeded}
+                        onToggle={handleToggleAlignment}
+                        title="Alternar necesidad de alineación"
+                      />
+                    </div>
+
+                    {/* 4. Falla / Diagnóstico Toggle */}
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-outline-variant bg-white p-2">
+                      <div className="min-w-0">
+                        <span className="font-label-caps text-[10px] font-bold text-on-surface-variant uppercase block">
+                          4. Falla / Diagnóstico
+                        </span>
+                        <span className={`text-[10px] font-semibold truncate block ${workOrder.diagnosisNeeded ? 'text-amber-800' : 'text-on-surface-variant'}`}>
+                          {workOrder.diagnosisNeeded ? '⚠️ Falla' : 'Sin fallas'}
+                        </span>
+                      </div>
+                      <InlineCheckbox
+                        checked={!!workOrder.diagnosisNeeded}
+                        onToggle={handleToggleDiagnosis}
+                        title="Marcar si el auto tiene falla reportada (impide lavar antes de taller)"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Resumen desplegable de Meta de Salida de Taller (solo visible al dar clic en 1. Servicio Base) */}
+                  {showTargetWorkshop && targetWorkshopDate && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-300 bg-emerald-50/80 px-3 py-1.5 text-xs text-primary animate-in fade-in duration-150">
+                      <div className="flex items-center gap-2">
+                        <span className="font-label-caps text-[10px] font-bold uppercase text-emerald-900">
+                          Meta Salida de Taller:
+                        </span>
+                        <strong className="font-data-mono font-black text-emerald-800 text-sm">
+                          {targetWorkshopDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                        </strong>
+                        <span className="text-[10px] text-on-surface-variant font-medium">
+                          (Promesa: {new Date(workOrder.estimatedDeliveryAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} - {workOrder.washNeeded !== false && !isWashCompleted ? '2.0h' : '30m'})
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-on-surface-variant font-medium">
+                        Taller: {mechHours.toFixed(1)}h • Lavado: {workOrder.washNeeded !== false ? '1.5h' : '0h'} • Colchón: 30 min
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reglas de Flujo y Restricción */}
+                  {workOrder.diagnosisNeeded ? (
+                    <div className="flex items-center gap-1.5 text-xs text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-300">
+                      <span className="font-medium text-[10.5px]">
+                        ⚠️ <strong>Restricción activa:</strong> La unidad reporta falla; debe ingresar a <strong>Taller primero</strong> para diagnóstico antes de pasar a Lavado.
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-900 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-300">
+                      <span className="font-medium text-[10.5px]">
+                        ✓ <strong>Flujo flexible habilitado:</strong> Si los mecánicos están ocupados y los lavadores desocupados, puede pasar a <strong>Lavado primero</strong>.
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* MODAL / CAJA DE CONFIRMACIÓN DE CAMBIO DE ETAPA */}

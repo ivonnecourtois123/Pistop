@@ -1,6 +1,7 @@
-export const TEAMS = ['SERVICIO', 'HYP'];
+export const TEAMS = ['SERVICIO', 'HYP', 'LAVADO'];
 
 export const TEAM_LABEL = {
-  SERVICIO: 'Servicio',
-  HYP: 'HYP',
+  SERVICIO: 'Servicio (Mecánica)',
+  HYP: 'HYP (Carrocería)',
+  LAVADO: 'Lavado / Detallado',
 };

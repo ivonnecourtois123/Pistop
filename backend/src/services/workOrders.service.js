@@ -420,6 +420,19 @@ async function updateWashNeeded(id, washNeeded) {
   });
 }
 
+async function updateAlignmentNeeded(id, alignmentNeeded) {
+  const existing = await prisma.workOrder.findUnique({ where: { id } });
+  if (!existing) {
+    throw ApiError.notFound('Orden de trabajo no encontrada');
+  }
+
+  return prisma.workOrder.update({
+    where: { id },
+    data: { alignmentNeeded },
+    include: INCLUDE_RELATIONS,
+  });
+}
+
 // technicianId null desasigna al técnico.
 async function updateTechnician(id, technicianId) {
   const existing = await prisma.workOrder.findUnique({ where: { id } });
@@ -529,6 +542,8 @@ async function capacityFor(team) {
         estimatedDeliveryAt: true,
         technicianId: true,
         status: true,
+        washNeeded: true,
+        alignmentNeeded: true,
       },
     }),
   ]);
@@ -600,7 +615,9 @@ async function capacityFor(team) {
   for (const wo of inProgress) {
     const isCarryover = wo.receivedAt && new Date(wo.receivedAt) < today0;
     const hasCategory = wo.serviceCategory && hoursByCategory[wo.serviceCategory] != null;
-    const stdHours = hasCategory ? hoursByCategory[wo.serviceCategory] : null;
+    const alignmentHours = wo.alignmentNeeded ? 0.5 : 0;
+    const baseStdHours = hasCategory ? hoursByCategory[wo.serviceCategory] : null;
+    const stdHours = hasCategory ? (baseStdHours + alignmentHours) : null;
 
     if (hasCategory) {
       demandHours += stdHours;
@@ -623,7 +640,7 @@ async function capacityFor(team) {
     // Carga asignada por técnico: siempre cuenta las órdenes y horas del técnico
     if (wo.technicianId && techMap.has(wo.technicianId)) {
       const t = techMap.get(wo.technicianId);
-      const hoursToAssign = hasCategory ? stdHours : defaultStandardHours;
+      const hoursToAssign = (hasCategory ? baseStdHours : defaultStandardHours) + alignmentHours;
 
       t.assignedHours += hoursToAssign;
       t.ordersCount += 1;
@@ -655,6 +672,44 @@ async function capacityFor(team) {
     isOverloaded: t.assignedHours > t.capacityHours,
   }));
 
+  // Capacidad de Lavado:
+  const washers = await prisma.technician.findMany({ where: { team: 'LAVADO', active: true } });
+  const washerCount = washers.length > 0 ? washers.length : 2; // configurable o fallback base a 2
+  const washHoursPerUnit = 1.5;
+  const washCapacityHours = washerCount * 8; // jornada estándar de 8 hrs
+
+  let activeWashUnits = 0;
+  let pendingWashUnits = 0;
+
+  for (const wo of inProgress) {
+    const needsWash = wo.washNeeded !== false; // activo por defecto a menos que se apague explícitamente
+    if (wo.status === 'LAVADO') {
+      activeWashUnits += 1;
+    } else if (needsWash && !['CONTROL_CALIDAD', 'TERMINADO', 'ENTREGADO'].includes(wo.status)) {
+      pendingWashUnits += 1;
+    }
+  }
+
+  const totalWashUnits = activeWashUnits + pendingWashUnits;
+  const washDemandHours = totalWashUnits * washHoursPerUnit;
+  const washAvailableHours = Math.max(0, washCapacityHours - washDemandHours);
+  const washAvailableSlots = Math.floor(washAvailableHours / washHoursPerUnit);
+  const washUtilization = washCapacityHours > 0 ? washDemandHours / washCapacityHours : 0;
+
+  const washCapacity = {
+    washerCount,
+    washersConfigured: washers.length,
+    washHoursPerUnit,
+    capacityHours: washCapacityHours,
+    activeUnits: activeWashUnits,
+    pendingUnits: pendingWashUnits,
+    totalUnits: totalWashUnits,
+    demandHours: washDemandHours,
+    availableHours: washAvailableHours,
+    availableSlots: washAvailableSlots,
+    utilization: washUtilization,
+  };
+
   return {
     team,
     technicianCount,
@@ -671,6 +726,7 @@ async function capacityFor(team) {
     unclassifiedCount,
     utilization: capacityHours > 0 ? demandHours / capacityHours : null,
     technicianBreakdown,
+    washCapacity,
   };
 }
 
@@ -813,6 +869,7 @@ module.exports = {
   updateCustomerWaiting,
   updateDiagnosisNeeded,
   updateWashNeeded,
+  updateAlignmentNeeded,
   updateInsurer,
   updateReportNumber,
   updateTechnician,

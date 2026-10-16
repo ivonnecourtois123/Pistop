@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { STAGE_LABEL } from '../../constants/stages.js';
+import { getCapacity } from '../../api/capacity.js';
 import {
   computeWorkProgress,
   PROGRESS_DOT_CLASS,
@@ -141,35 +142,202 @@ function upcomingDaysWithOrders(workOrders, selectedDate) {
     .map(([key, count]) => ({ key, date: fromDateInputValue(key), count }));
 }
 
+function computeDeliveryTiming(workOrder, standardHours) {
+  const { statusEvents = [] } = workOrder;
+  const isWashCompleted =
+    ['CONTROL_CALIDAD', 'TERMINADO', 'ENTREGADO'].includes(workOrder.status) ||
+    statusEvents.some((e) => e.status === 'LAVADO' && workOrder.status !== 'LAVADO');
+
+  const categoryHours = standardHours?.[workOrder.serviceCategory] ?? 1.5;
+  const mechHours = categoryHours + (workOrder.alignmentNeeded ? 0.5 : 0);
+  const needsWash = workOrder.washNeeded !== false;
+
+  let targetWorkshopDate = null;
+  let statusTraffic = 'OK'; // 'OK' | 'WARN' | 'LATE' | 'DONE'
+  let trafficLabel = 'En tiempo';
+
+  if (['TERMINADO', 'ENTREGADO'].includes(workOrder.status)) {
+    statusTraffic = 'DONE';
+    trafficLabel = 'Listo';
+  } else if (workOrder.estimatedDeliveryAt) {
+    const deliveryDate = new Date(workOrder.estimatedDeliveryAt);
+    const now = new Date();
+    const bufferMs = 30 * 60 * 1000; // 30 min buffer final
+    const washMs = needsWash && !isWashCompleted && workOrder.status !== 'LAVADO' ? 90 * 60 * 1000 : 0; // 90 min de lavado si falta
+    targetWorkshopDate = new Date(deliveryDate.getTime() - bufferMs - washMs);
+
+    if (now > deliveryDate) {
+      statusTraffic = 'LATE';
+      trafficLabel = 'Atrasado';
+    } else if (['RECIBIDO', 'EN_TALLER'].includes(workOrder.status) || !workOrder.status) {
+      if (now > targetWorkshopDate) {
+        statusTraffic = 'LATE';
+        trafficLabel = 'Taller fuera de tiempo';
+      } else {
+        const msRemaining = targetWorkshopDate.getTime() - now.getTime();
+        const requiredMechMs = mechHours * 60 * 60 * 1000;
+        if (msRemaining < requiredMechMs || msRemaining < 30 * 60 * 1000) {
+          statusTraffic = 'WARN';
+          trafficLabel = 'En riesgo';
+        } else {
+          statusTraffic = 'OK';
+          trafficLabel = 'En tiempo';
+        }
+      }
+    } else if (workOrder.status === 'LAVADO') {
+      const readyDeadline = new Date(deliveryDate.getTime() - bufferMs);
+      if (now > readyDeadline) {
+        statusTraffic = 'LATE';
+        trafficLabel = 'Lavado excedido';
+      } else if (readyDeadline.getTime() - now.getTime() < 45 * 60 * 1000) {
+        statusTraffic = 'WARN';
+        trafficLabel = 'Lavado ajustado';
+      } else {
+        statusTraffic = 'OK';
+        trafficLabel = 'En lavado';
+      }
+    } else if (workOrder.status === 'CONTROL_CALIDAD') {
+      if (now > deliveryDate) {
+        statusTraffic = 'LATE';
+        trafficLabel = 'Entrega demorada';
+      } else {
+        statusTraffic = 'OK';
+        trafficLabel = 'Revisión final';
+      }
+    }
+  }
+
+  return {
+    isWashCompleted,
+    mechHours,
+    needsWash,
+    targetWorkshopDate,
+    statusTraffic,
+    trafficLabel,
+  };
+}
+
+const TRAFFIC_BADGE = {
+  OK: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+  WARN: 'bg-amber-100 text-amber-800 border-amber-300',
+  LATE: 'bg-rose-100 text-rose-800 border-rose-300 animate-pulse',
+  DONE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+};
+
+const TRAFFIC_BORDER = {
+  OK: 'border-l-emerald-500',
+  WARN: 'border-l-amber-500',
+  LATE: 'border-l-rose-500 ring-1 ring-rose-200',
+  DONE: 'border-l-emerald-400 opacity-90',
+};
+
 function VehicleCard({ workOrder, standardHours, onSelect }) {
   const { vehicle } = workOrder;
-  const progress = standardHours ? computeWorkProgress(workOrder, standardHours) : null;
+  const timing = computeDeliveryTiming(workOrder, standardHours);
   const timeStr = workOrder.estimatedDeliveryAt
     ? new Date(workOrder.estimatedDeliveryAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+    : null;
+  const targetWorkshopStr = timing.targetWorkshopDate
+    ? timing.targetWorkshopDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
     : null;
 
   return (
     <button
       type="button"
       onClick={() => onSelect?.(workOrder)}
-      title={`Orden #${workOrder.orderNumber} • ${vehicle?.brand || ''} ${vehicle?.model || ''} • Clic para ver etapas`}
-      className={`group flex w-full flex-col rounded-md border border-outline-variant/80 bg-white px-2 py-1 text-left transition-all hover:border-primary hover:shadow-xs hover:scale-[1.01] cursor-pointer shadow-2xs ${
-        progress ? `border-l-3 ${PROGRESS_STRIPE_CLASS[progress.level]}` : ''
+      title={`Orden #${workOrder.orderNumber} • ${vehicle?.brand || ''} ${vehicle?.model || ''} • ${timing.trafficLabel} • Clic para ver etapas y servicios`}
+      className={`group flex w-full flex-col rounded-md border border-outline-variant/80 border-l-4 bg-white p-2 text-left transition-all hover:border-primary hover:shadow-xs hover:scale-[1.01] cursor-pointer shadow-2xs ${
+        TRAFFIC_BORDER[timing.statusTraffic] || 'border-l-outline-variant'
       }`}
     >
-      <div className="flex items-center justify-between gap-1 w-full">
-        <span className="font-data-mono text-[11px] font-bold text-primary truncate">
+      {/* Header: #OR + Semáforo + Hora Promesa */}
+      <div className="flex items-center justify-between gap-1 w-full mb-1">
+        <span className="font-data-mono text-[11px] font-black text-primary truncate">
           #{workOrder.orderNumber}
         </span>
-        {timeStr && (
-          <span className="font-data-mono text-[9px] font-semibold text-on-surface-variant/70 shrink-0">
-            {timeStr}
+        <div className="flex items-center gap-1 shrink-0">
+          <span
+            className={`rounded px-1.5 py-0.2 font-label-caps text-[9px] font-extrabold border ${
+              TRAFFIC_BADGE[timing.statusTraffic] || 'bg-surface-container text-on-surface-variant'
+            }`}
+          >
+            {timing.trafficLabel}
+          </span>
+          {timeStr && (
+            <span className="font-data-mono text-[10px] font-bold text-primary bg-primary/5 px-1 py-0.2 rounded border border-primary/20">
+              🕒 {timeStr}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Auto y Placas */}
+      <div className="flex items-center justify-between gap-1 w-full mb-1 text-[11px]">
+        <span className="font-semibold text-primary truncate">
+          {vehicle?.model || vehicle?.brand || 'Sin modelo'}
+        </span>
+        {vehicle?.plate && (
+          <span className="font-data-mono text-[9px] text-on-surface-variant font-medium shrink-0">
+            {vehicle.plate}
           </span>
         )}
       </div>
-      <span className="truncate font-body-sm text-[10px] text-on-surface-variant leading-tight">
-        {vehicle?.model || vehicle?.brand || 'Sin modelo'}
-      </span>
+
+      {/* Badges de Trabajos y Servicios */}
+      <div className="flex flex-wrap items-center gap-1 w-full my-0.5">
+        {/* Servicio Base */}
+        <span className="rounded bg-surface-container px-1 py-0.2 font-label-caps text-[9px] font-bold text-primary">
+          🔧 {workOrder.serviceCategory || 'MANT'} ({timing.mechHours.toFixed(1)}h)
+        </span>
+
+        {/* Alineación */}
+        {workOrder.alignmentNeeded && (
+          <span className="rounded bg-purple-50 text-purple-800 border border-purple-200 px-1 py-0.2 font-label-caps text-[9px] font-bold">
+            +Alineación
+          </span>
+        )}
+
+        {/* Falla Reportada */}
+        {workOrder.diagnosisNeeded && (
+          <span
+            className="rounded bg-amber-50 text-amber-900 border border-amber-300 px-1 py-0.2 font-label-caps text-[9px] font-bold"
+            title="Requiere taller primero antes de lavar"
+          >
+            ⚠️ Falla
+          </span>
+        )}
+
+        {/* Lavado Status (terminología estricta: nunca pre-lavado) */}
+        {timing.needsWash ? (
+          timing.isWashCompleted ? (
+            <span className="rounded bg-emerald-50 text-emerald-800 border border-emerald-300 px-1 py-0.2 font-label-caps text-[9px] font-bold">
+              ✓ Lavado: Realizado
+            </span>
+          ) : (
+            <span className="rounded bg-blue-50 text-blue-800 border border-blue-200 px-1 py-0.2 font-label-caps text-[9px] font-medium">
+              🚿 Lavado: Pendiente
+            </span>
+          )
+        ) : (
+          <span className="rounded bg-surface-container-low text-on-surface-variant/70 px-1 py-0.2 font-label-caps text-[9px]">
+            Sin lavado
+          </span>
+        )}
+      </div>
+
+      {/* Footer: Meta de Taller y Etapa Actual */}
+      <div className="flex items-center justify-between gap-1 w-full mt-1 pt-1 border-t border-outline-variant/40 text-[9px] font-data-mono text-on-surface-variant">
+        {targetWorkshopStr ? (
+          <span title={`Meta salida de taller (${timing.needsWash && !timing.isWashCompleted ? 'Promesa - 2.0h' : 'Promesa - 30m'})`}>
+            Meta Taller: <strong className="text-primary font-bold">{targetWorkshopStr}</strong>
+          </span>
+        ) : (
+          <span>Sin meta</span>
+        )}
+        <span className="rounded bg-surface-container px-1 py-0.2 font-label-caps text-[8px] font-bold text-on-surface-variant uppercase">
+          {STAGE_LABEL[workOrder.status] || workOrder.status}
+        </span>
+      </div>
     </button>
   );
 }
@@ -177,6 +345,13 @@ function VehicleCard({ workOrder, standardHours, onSelect }) {
 export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, opStats }) {
   const [selectedDate, setSelectedDate] = useState(startOfToday);
   const [onlyActiveHours, setOnlyActiveHours] = useState(false);
+  const [capacity, setCapacity] = useState(null);
+
+  useEffect(() => {
+    getCapacity('SERVICIO')
+      .then(setCapacity)
+      .catch(() => {});
+  }, [workOrders]);
 
   const { rows, columns, cells } = useMemo(
     () => buildMatrix(workOrders, selectedDate, onlyActiveHours),
@@ -188,13 +363,14 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
   const isToday = isSameDay(selectedDate, startOfToday());
   const totalCount = [...cells.values()].reduce((sum, items) => sum + items.length, 0);
 
-  // Horas asignadas por cada técnico en el día seleccionado
+  // Horas asignadas por cada técnico en el día seleccionado (incluye alineación si aplica)
   const techHoursMap = useMemo(() => {
     const map = new Map();
     const { withHour, noTime } = unitsForSelectedDate(workOrders, selectedDate);
     for (const wo of [...withHour, ...noTime]) {
       const name = wo.technician?.name || 'Sin asignar';
-      const std = wo.serviceCategory && standardHours ? standardHours[wo.serviceCategory] : 1.5;
+      const baseStd = wo.serviceCategory && standardHours ? standardHours[wo.serviceCategory] : 1.5;
+      const std = baseStd + (wo.alignmentNeeded ? 0.5 : 0);
       map.set(name, (map.get(name) || 0) + std);
     }
     return map;
@@ -286,7 +462,7 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
           </button>
         </div>
 
-        {/* 4 Indicadores Operativos en pills compactos */}
+        {/* Indicadores Operativos y Capacidad de MO en pills compactos */}
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="flex items-center gap-1 rounded-md border border-outline-variant bg-white px-2 py-0.5 shadow-2xs">
             <span className="font-label-caps text-[9px] text-on-surface-variant font-bold">TOTAL:</span>
@@ -304,29 +480,69 @@ export default function PromiseTimeBoard({ workOrders, standardHours, onSelect, 
             <span className="font-label-caps text-[9px] text-rose-900 font-bold">REZAGADOS:</span>
             <span className="font-data-mono text-xs font-black text-rose-800">{computedOpStats.rezagados}</span>
           </div>
-          <span className="font-label-caps text-[10px] text-on-surface-variant/80 font-bold pl-1">
+          <span className="font-label-caps text-[10px] text-on-surface-variant/80 font-bold px-1">
             ({totalCount} en vista)
           </span>
+
+          {/* DUAL CAPACITY PILLS: TÉCNICOS & LAVADORES */}
+          {capacity && (
+            <div className="flex flex-wrap items-center gap-1.5 pl-1.5 border-l border-outline-variant/60">
+              {/* MO Técnicos */}
+              <div
+                title={`Capacidad Técnicos: ${capacity.capacityHours?.toFixed(1) || 0}h instaladas (${capacity.technicianCount || 0} técnicos), ${capacity.demandHours?.toFixed(1) || 0}h demanda estimada`}
+                className="flex items-center gap-1 rounded-md border border-outline-variant bg-white px-2 py-0.5 shadow-2xs"
+              >
+                <span className="font-label-caps text-[9px] text-on-surface-variant font-bold">🔧 MO TÉCNICOS:</span>
+                <span className="font-data-mono text-xs font-black text-primary">
+                  {capacity.availableHours?.toFixed(1) || 0}h libres
+                </span>
+                <span className="text-[9px] text-on-surface-variant font-medium">
+                  ({Math.round((capacity.utilization || 0) * 100)}% ocup.)
+                </span>
+              </div>
+
+              {/* MO Lavadores */}
+              <div
+                title={`Capacidad Lavadores: ${capacity.washCapacity?.capacityHours?.toFixed(1) || 0}h (${capacity.washCapacity?.washerCount || 0} lavadores en catálogo), ${capacity.washCapacity?.totalUnits || 0} unidades con lavado requerido (1.5h c/u)`}
+                className="flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50/70 px-2 py-0.5 shadow-2xs"
+              >
+                <span className="font-label-caps text-[9px] text-blue-900 font-bold">🚿 MO LAVADORES:</span>
+                <span className="font-data-mono text-xs font-black text-blue-800">
+                  {capacity.washCapacity?.availableHours?.toFixed(1) || 0}h libres
+                </span>
+                <span className="text-[9px] text-blue-700 font-bold">
+                  ({capacity.washCapacity?.availableSlots || 0} cupos)
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Sub-barra: Semáforo y Otros Días */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant/40 bg-surface-container/20 px-4 py-1.5 text-[10px] font-label-caps text-on-surface-variant">
-        {standardHours && (
-          <div className="flex items-center gap-2.5">
-            <span className="font-bold text-on-surface-variant">Semáforo:</span>
-            {[
-              { level: 'OK', label: 'A tiempo' },
-              { level: 'WARN', label: 'Por vencer' },
-              { level: 'LATE', label: 'Excedido' },
-            ].map((l) => (
-              <span key={l.level} className="inline-flex items-center gap-1">
-                <span className={`h-1.5 w-1.5 rounded-full ${PROGRESS_DOT_CLASS[l.level]}`} />
-                {l.label}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-bold text-on-surface-variant">Semáforo de Entrega:</span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            En tiempo
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-amber-500" />
+            Por vencer / En riesgo
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-rose-500" />
+            Atrasado / Taller excedido
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full bg-emerald-700" />
+            Listo
+          </span>
+          <span className="text-[9px] text-on-surface-variant/70 font-normal pl-2 border-l border-outline-variant/60 hidden md:inline">
+            💡 Regla: Entrega lista 30m antes • Lavado 1.5h • Meta taller = Promesa - 2h (o -30m si ya se lavó)
+          </span>
+        </div>
 
         {otherDays.length > 0 && (
           <div className="flex items-center gap-1.5 overflow-x-auto">

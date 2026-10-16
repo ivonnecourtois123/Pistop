@@ -81,6 +81,10 @@ const washNeededSchema = z.object({
   washNeeded: z.boolean(),
 });
 
+const alignmentNeededSchema = z.object({
+  alignmentNeeded: z.boolean(),
+});
+
 // null limpia el campo
 const insurerSchema = z.object({
   insurer: z.union([z.null(), z.string()]),
@@ -200,6 +204,12 @@ async function updateDiagnosisNeeded(req, res) {
 async function updateWashNeeded(req, res) {
   const { washNeeded } = washNeededSchema.parse(req.body);
   const workOrder = await workOrdersService.updateWashNeeded(req.params.id, washNeeded);
+  res.json(workOrder);
+}
+
+async function updateAlignmentNeeded(req, res) {
+  const { alignmentNeeded } = alignmentNeededSchema.parse(req.body);
+  const workOrder = await workOrdersService.updateAlignmentNeeded(req.params.id, alignmentNeeded);
   res.json(workOrder);
 }
 
@@ -373,6 +383,7 @@ module.exports = {
   updateCustomerWaiting,
   updateDiagnosisNeeded,
   updateWashNeeded,
+  updateAlignmentNeeded,
   updateInsurer,
   updateReportNumber,
   updateTechnician,

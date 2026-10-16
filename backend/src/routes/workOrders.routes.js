@@ -36,6 +36,7 @@ router.patch('/:id/customer-waiting', controller.updateCustomerWaiting);
 router.patch('/:id/service-category', controller.updateServiceCategory);
 router.patch('/:id/diagnosis-needed', controller.updateDiagnosisNeeded);
 router.patch('/:id/wash-needed', controller.updateWashNeeded);
+router.patch('/:id/alignment-needed', controller.updateAlignmentNeeded);
 router.patch('/:id/insurer', controller.updateInsurer);
 router.patch('/:id/report-number', controller.updateReportNumber);
 router.patch('/:id/technician', controller.updateTechnician);

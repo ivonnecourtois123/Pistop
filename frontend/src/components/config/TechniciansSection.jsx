@@ -73,20 +73,20 @@ export default function TechniciansSection() {
 
   return (
     <section className="rounded-lg border border-outline-variant bg-surface-container-lowest p-card-padding card-elevation">
-      <h2 className="mb-4 font-headline-md text-headline-md text-primary">Técnicos</h2>
+      <h2 className="mb-4 font-headline-md text-headline-md text-primary">Personal Operativo (Técnicos y Lavadores)</h2>
       {error && <p className="mb-3 text-sm text-error">{error}</p>}
 
       <form onSubmit={handleAdd} className="mb-6 flex flex-wrap gap-3">
         <input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="Nombre del técnico"
+          placeholder="Nombre del técnico o lavador"
           className="flex-1 min-w-[200px] rounded-lg border border-outline-variant bg-white px-3 py-2 font-body-md text-primary"
         />
         <input
           value={newSpecialty}
           onChange={(e) => setNewSpecialty(e.target.value)}
-          placeholder="Especialidad (opcional)"
+          placeholder="Especialidad / Rol (ej: Diagnóstico, Bahía de Lavado, Nivel 2)"
           className="flex-1 min-w-[200px] rounded-lg border border-outline-variant bg-white px-3 py-2 font-body-md text-primary"
         />
         <select

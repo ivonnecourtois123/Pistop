@@ -155,6 +155,7 @@ model WorkOrder {
   // Casilla manual independiente de `serviceCategory`: un correctivo pesado también puede
   // requerir diagnóstico previo, así que no se deriva del tipo de servicio.
   diagnosisNeeded Boolean?
+  alignmentNeeded Boolean? @default(false)
 
   // Datos de aseguradora para órdenes HYP (hojalatería y pintura). Independientes del
   // `InsuranceCase` de Inmovilizados/Seguros — esos expedientes son 1-a-1 con una
