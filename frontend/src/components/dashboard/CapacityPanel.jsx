@@ -19,12 +19,37 @@ export default function CapacityPanel({ team, refreshKey }) {
   const [showTechBreakdown, setShowTechBreakdown] = useState(false);
 
   useEffect(() => {
+    setError('');
     getCapacity(team)
-      .then(setData)
+      .then((res) => {
+        setData(res);
+        setError('');
+      })
       .catch(() => setError('No se pudo cargar la capacidad del taller.'));
   }, [team, refreshKey]);
 
-  if (error) return <p className="mt-4 text-sm text-error">{error}</p>;
+  if (error) {
+    return (
+      <div className="mt-2 flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-850">
+        <span className="font-semibold text-rose-800">⚠️ {error}</span>
+        <button
+          type="button"
+          onClick={() => {
+            setError('');
+            getCapacity(team)
+              .then((res) => {
+                setData(res);
+                setError('');
+              })
+              .catch(() => setError('No se pudo cargar la capacidad del taller.'));
+          }}
+          className="rounded-lg bg-white border border-rose-300 px-3 py-1 font-bold text-rose-800 hover:bg-rose-100 transition-colors cursor-pointer shadow-2xs"
+        >
+          🔄 Reintentar
+        </button>
+      </div>
+    );
+  }
   if (!data) return null;
 
   const isHyp = team === 'HYP';

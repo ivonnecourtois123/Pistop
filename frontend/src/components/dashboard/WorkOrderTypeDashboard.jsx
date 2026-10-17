@@ -519,7 +519,7 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
             )}
           </div>
         ) : activeMainTab === 'dashboard' ? (
-          /* PESTAÑA 4: DASHBOARD (TABLERO DE INDICADORES Y OCUPACIÓN DE MANO DE OBRA) */
+          /* PESTAÑA 4: DASHBOARD (TABLERO DE INDICADORES DE REFACCIONES Y REZAGADAS) */
           <div className="w-full space-y-6">
             {/* 1. Tarjetas Superiores: Refacciones y Clasificaciones de Antigüedad */}
             <StatsTiles
@@ -530,9 +530,6 @@ export default function WorkOrderTypeDashboard({ orderType, showPromiseBoard, sh
                 if (f) setActiveMainTab('seguimiento');
               }}
             />
-
-            {/* 2. Panel de Capacidad y Ocupación de Mano de Obra (MO) */}
-            <CapacityPanel team={orderType} refreshKey={capacityRefreshKey} />
           </div>
         ) : (
           /* PESTAÑA 2: SEGUIMIENTO DE UNIDADES EN PROCESO Y REZAGADAS */
